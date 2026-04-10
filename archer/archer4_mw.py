@@ -217,7 +217,7 @@ def archer4_mw(image, attrib, first_guess, para_fix=True, display_filename=None)
     # Calculate the probability of having detected an eye (only for 89GHz)
 
     if attrib['archer_channel_type'] == '89GHz':
-       eye_prob_stat = confidence_score * ring_score;
+       eye_prob_stat = confidence_score * ring_score
        calib_stat_arr = [0, 5, 10, 15, 20,  30,  40,  50,  60,  70,  75,  80]
        calib_perc_arr = [0, 9, 27, 44, 56,  72,  82,  90,  94,  99, 100, 100]
        eye_prob = np.interp(eye_prob_stat, calib_stat_arr, calib_perc_arr)

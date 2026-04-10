@@ -111,12 +111,12 @@ def archer4_visir(image, attrib, first_guess, para_fix=True, display_filename=No
 
         else:
 
-            if attrib['scan_type'] is 'Geo':
+            if attrib['scan_type'] == 'Geo':
                 image['lon_pc_grid'], image['lat_pc_grid'] = nvtbx.parallax_fix_geo(
                     image['lon_grid'], image['lat_grid'], 
                     attrib['nadir_lon'], attrib['sensor'], structure_height_km)
 
-            elif attrib['scan_type'] is 'Crosstrack':
+            elif attrib['scan_type'] == 'Crosstrack':
                 image['lon_pc_grid'], image['lat_pc_grid'] = nvtbx.parallax_fix_crosstrack(
                     image['lon_grid'], image['lat_grid'], 
                     attrib['sensor'], attrib['archer_channel_type'], 
@@ -158,14 +158,14 @@ def archer4_visir(image, attrib, first_guess, para_fix=True, display_filename=No
         # image lat/lon grid is *unaltered* lat/lon. However, in_dict lat/lon is the lat/lon
         # *to be used in Archer*.
 
-        if level is 'feature':
+        if level == 'feature':
 
             print('Computing center-fix on full image...')
             in_dict['lon_mx'] = image['lon_pc_grid']
             in_dict['lat_mx'] = image['lat_pc_grid']
             in_dict['bt_mx'] = image['bt_grid']
 
-        elif level is 'surface':
+        elif level == 'surface':
 
             print('Computing center-fix on cloud-masked image (w/o parallax fix) ...')
             in_dict['lon_mx'] = image['lon_grid']
@@ -176,7 +176,7 @@ def archer4_visir(image, attrib, first_guess, para_fix=True, display_filename=No
             # With IR imagery, we have to consider pixels with partial clouds/convection.
             # Dilate these features by 2 (NOTE: for ~10 km resolution):
 
-            if attrib['archer_channel_type'] is 'IR':
+            if attrib['archer_channel_type'] == 'IR':
 
                 dilate_val = 2
                 out_mx = in_dict['bt_mx']
@@ -289,7 +289,7 @@ def archer4_visir(image, attrib, first_guess, para_fix=True, display_filename=No
             out_dict['weak_center_lon'] = None
             out_dict['weak_center_lat'] = None
 
-            if level is 'feature':
+            if level == 'feature':
                 # If it made it this far successfully, then no need to try the next option ('surface')
                 break 
 

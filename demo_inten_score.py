@@ -26,7 +26,7 @@ def convert_matlab_time(matlab_datenum):
     secs_in_day = 86400
 
     # Seconds since 1970 for time module object:
-    time_secs = [calendar.timegm(time.gmtime((i - days_0000_to_1970) * secs_in_day)) for i in matlab_datenum]
+    time_secs = [calendar.timegm(time.gmtime((i.item() - days_0000_to_1970) * secs_in_day)) for i in matlab_datenum]
 
     # Convert list to numpy array
     if len(time_secs) > 1:

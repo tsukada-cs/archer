@@ -32,7 +32,7 @@ def reduce_step(lonGrid, latGrid, step_km=4):
     # Calculate the row and col step necessary to bring the image to step_km resolution
     # For IR, step_km is 4 (km)
 
-    rpd = np.pi/180;
+    rpd = np.pi/180
     km_per_gcd = 6370*rpd
 
     num_rows, num_cols = np.shape(lonGrid)
