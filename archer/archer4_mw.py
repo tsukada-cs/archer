@@ -1,146 +1,111 @@
-from __future__ import print_function
-import matplotlib
-matplotlib.use('agg') # AJW 16Aug2018
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import matplotlib.gridspec as gridspec
-from matplotlib import cm
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-plt.close('all')
-
-matplotlib.rcParams['axes.titlesize'] = 10
-matplotlib.rcParams['axes.labelsize'] = 10
-matplotlib.rcParams['legend.fontsize'] = 10
-matplotlib.rcParams['font.size'] = 10
+#%%
+import logging
 
 import numpy as np
-import os, sys
-import time
-import netCDF4
-#from importlib import reload
 
-import archer.utilities.DisplayToolbox as ditbx
-import archer.utilities.MapToolbox as mptbx
-import archer.utilities.ScoreFuncs as sftbx
-import archer.utilities.Conversions as cotbx
-#import archer.utilities.NetcdfToolbox as nctbx
-import archer.utilities.NavToolbox as nvtbx
+from archer.utilities import plot_tools
+from archer.utilities import map_tools
+from archer.utilities import score_funcs
+from archer.utilities import conversions
+from archer.utilities import nav_tools
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s %(levelname)s %(name)s p%(process)d] %(message)s', datefmt='%d%b %H%M:%S')
 
 
-def archer4_mw(image, attrib, first_guess, para_fix=True, display_filename=None):
+def _get_ring_weight(vmax):
+    if vmax < 45:
+        return 0.005 # very very small
+    elif vmax >= 45 and vmax < 84:
+        return 0.0694
+    elif vmax >= 84:
+        return 0.0263
+    else:
+        logger.error('`op_vmax` must be a scalar')
+        return np.nan
 
+def _get_mask_val(channel_type):
+    if channel_type == '89GHz':
+        return 245 # 245 avoids ice
+    elif channel_type == '37GHz':
+        return 50 # Basically, no mask
+    elif channel_type == '183GHz':
+        return 50 # Basically, no mask
+    else:
+        logger.error(f'Unknown `channel_type`: {channel_type}')
+        return np.nan
+
+def _get_structure_height_km(channel_type):
+    if channel_type == '89GHz':
+        return 10
+    elif channel_type == '37GHz':
+        return 3
+    elif channel_type == '183GHz':
+        return 3
+    elif channel_type == '183GHz':
+        return 12
+    else:
+        logger.error(f'Unknown `channel_type`: {channel_type}')
+        return np.nan
+
+def _get_penalty_weight(channel_type):
+    if channel_type == '89GHz':
+        return 1.0
+    elif channel_type == '37GHz':
+        return 1.0
+    elif channel_type == '183GHz':
+        return 1.0
+    else:
+        logger.error(f'Unknown `channel_type`: {channel_type}')
+        return np.nan
+
+def archer4_mw(image, attrib, first_guess, alpha=np.deg2rad(5), para_fix=True, display_filename=None):
+    """
     # archer4_mw:
 
     # This function performs the high-level logic for archer on microwave data
     # For complete information on the inputs and outputs, refer to archer4.py
     # AJW, CIMSS, Apr 2020.
-
-
+    """
     # Dictionaries to return:
     in_dict = {}
     out_dict = {}
     score_dict = {}
 
-
     # Channel-specific settings
+    ring_weight = _get_ring_weight(first_guess['vmax'])
+    structure_height_km = _get_structure_height_km(attrib['archer_channel_type'])
+    mask_val = _get_mask_val(attrib['archer_channel_type'])
+    penalty_weight = _get_penalty_weight(attrib['archer_channel_type'])
+
     if attrib['archer_channel_type'] == '89GHz':
-
-        if first_guess['vmax'] < 45:
-            ring_weight = 0.005 # very very small
-        elif first_guess['vmax'] >= 45 and first_guess['vmax'] < 84:
-            ring_weight = 0.0694
-        elif first_guess['vmax'] >= 84:
-            ring_weight = 0.0263
-        else:
-            print('Fatal error: op_vmax must be a scalar')
-
-        structure_height_km = 10
-        mask_val = 245 # 245 avoids ice
-        penalty_weight = 1.0
-
-        # Archer acts on BT. This sends it coast-masked BT.
-        image['bt_grid'] = mptbx.nan_around_coasts_89(
-            image['lon_grid'], image['lat_grid'], image['data_grid']) 
-
-
-    elif attrib['archer_channel_type'] == '37GHz': # Not as well validated
-
-        if first_guess['vmax'] < 45:
-            ring_weight = 0.005
-        elif first_guess['vmax'] >= 45 and first_guess['vmax'] < 84:
-            ring_weight = 0.0694
-        elif first_guess['vmax'] >= 84:
-            ring_weight = 0.0263
-        else:
-            print('Fatal error: op_vmax must be a scalar')
-
-        structure_height_km = 3
-        mask_val = 50 # Basically, no mask
-        penalty_weight = 1.0
-
-        # Archer acts on BT. This sends it the original BT.
+        image['bt_grid'] = map_tools.nan_around_coasts_89(image['lon_grid'], image['lat_grid'], image['data_grid'])
+    elif attrib['archer_channel_type'] in ('37GHz', '183GHz'): # Not as well validated
         image['bt_grid'] = image['data_grid']
-
-
-    elif attrib['archer_channel_type'] == '183GHz': # Not as well validated
-
-        if first_guess['vmax'] < 45:
-            ring_weight = 0.005
-        elif first_guess['vmax'] >= 45 and first_guess['vmax'] < 84:
-            ring_weight = 0.0694
-        elif first_guess['vmax'] >= 84:
-            ring_weight = 0.0263
-        else:
-            print('Fatal error: op_vmax must be a scalar')
-
-        structure_height_km = 12
-        mask_val = 50 # Basically, no mask
-        penalty_weight = 1.0
-
-        # Archer acts on BT. This sends it the original BT.
-        image['bt_grid'] = image['data_grid']
-
 
     # Revamp lon grid to prevent being cut in half in case it straddles the antemeridian
-    image['lon_grid'] = nvtbx.antemeridian_decross(image['lon_grid'], first_guess['lon'])
-
+    image['lon_grid'] = nav_tools.antemeridian_decross(image['lon_grid'], first_guess['lon'])
 
     # Parallax fix
-
     if para_fix:
-
         if attrib['scan_type'] == 'Conical':
-            image['lon_pc_grid'], image['lat_pc_grid'] = nvtbx.parallax_fix_conical(
-                image['lon_grid'], image['lat_grid'], 
-                attrib['sensor'], structure_height_km)
-
+            image['lon_pc_grid'], image['lat_pc_grid'] = nav_tools.parallax_fix_conical(
+                image['lon_grid'], image['lat_grid'], attrib['sensor'], structure_height_km)
         elif attrib['scan_type'] == 'Crosstrack':
-            image['lon_pc_grid'], image['lat_pc_grid'] = nvtbx.parallax_fix_crosstrack(
-                image['lon_grid'], image['lat_grid'], 
-                attrib['sensor'], attrib['archer_channel_type'], 
-                structure_height_km)
-
+            image['lon_pc_grid'], image['lat_pc_grid'] = nav_tools.parallax_fix_crosstrack(
+                image['lon_grid'], image['lat_grid'], attrib['sensor'], attrib['archer_channel_type'], structure_height_km)
     else:
-
-        print('Caution: There is no parallax fix here because archer does not recognize a valid attrib[''scan_type'']')
-
-        image['lon_pc_grid'], image['lat_pc_grid'] = \
-            image['lon_grid'], image['lat_grid']
-
+        logger.warning('There is no parallax fix here because archer does not recognize a valid attrib[''scan_type'']')
+        image['lon_pc_grid'], image['lat_pc_grid'] = image['lon_grid'], image['lat_grid']
 
     # Revamp lon grid to prevent being cut in half in case it straddles the antemeridian
-    #image['lon_pc_grid'] = nvtbx.antemeridian_decross(image['lon_pc_grid'])
-
-
-    print('Computing center-fix on whole image...')
+    # image['lon_pc_grid'] = nav_tools.antemeridian_decross(image['lon_pc_grid'])
+    logger.info('Computing center-fix on whole image...')
 
     # Write all the input data to a dictionary
-
     # Note here that the naming of "default" lat/lon changes between in_dict and image. 
     # image lat/lon grid is *unaltered* lat/lon. However, in_dict lat/lon is the lat/lon
     # *to be used in Archer*.
-
     in_dict['sensor'] = attrib['archer_channel_type']
     in_dict['lon_mx'] = image['lon_pc_grid']
     in_dict['lat_mx'] = image['lat_pc_grid']
@@ -151,26 +116,21 @@ def archer4_mw(image, attrib, first_guess, para_fix=True, display_filename=None)
     in_dict['op_vmax'] = first_guess['vmax']
     in_dict['ring_weight'] = ring_weight # Just for display purposes
 
-
     # Calculate gridded score components
-    score_dict = sftbx.combo_parts_calc_3_0(in_dict, penalty_weight=penalty_weight)
-
+    score_dict = score_funcs.combo_parts_calc_3_0(in_dict, penalty_weight=penalty_weight, alpha=alpha)
 
     # Clean up the spiral and ring score to allow a combo center in nan (incl. 
     # cloud-masked) areas
-    score_dict['spiral_score_grid'][np.isnan(score_dict['spiral_score_grid'])] = -1e9
-    score_dict['ring_score_grid'][np.isnan(score_dict['ring_score_grid'])] = 0
-
+    np.nan_to_num(score_dict['spiral_score_grid'], nan=-1e9, copy=False)
+    np.nan_to_num(score_dict['ring_score_grid'], nan=0, copy=False)
 
     # Calculate combo score, target point
-
-    combo_grid = (score_dict['spiral_score_grid'] - score_dict['penalty_grid']) + \
-        ring_weight * score_dict['ring_score_grid']
+    combo_grid = (score_dict['spiral_score_grid'] - score_dict['penalty_grid']) + ring_weight * score_dict['ring_score_grid']
     score_dict['combo_score_grid'] = combo_grid
 
     combo_score = np.max(combo_grid)
     max_idx = np.argmax(combo_grid)
-    i_combo_max, j_combo_max = sftbx.ind2sub(np.shape(combo_grid), max_idx)
+    i_combo_max, j_combo_max = np.unravel_index(max_idx, combo_grid.shape)
 
     lon_combo_max = score_dict['lon_grid1'][i_combo_max, j_combo_max]
     lat_combo_max = score_dict['lat_grid1'][i_combo_max, j_combo_max]
@@ -180,56 +140,49 @@ def archer4_mw(image, attrib, first_guess, para_fix=True, display_filename=None)
     score_by_radius_arr = np.squeeze(score_dict['ring_score_grid_full'][i_combo_max, j_combo_max, :])
     gradient_grid = np.squeeze(score_dict['radial_gradient_4d'][i_combo_max, j_combo_max, :])
 
-
     # Calculate confidence score using combo grid w/o the distance penalty.
     # The confidence score is the maximum value minus the highest score CONFIDENCE_DIST_DEG away
-
-    confidence_grid = (score_dict['spiral_score_grid'] - 0*score_dict['penalty_grid']) + \
-        ring_weight * score_dict['ring_score_grid']
+    confidence_grid = (score_dict['spiral_score_grid'] - 0*score_dict['penalty_grid']) + ring_weight * score_dict['ring_score_grid']
     confidence_max = np.nanmax(confidence_grid)
     confidence_max_idx = np.argmax(confidence_grid)
-    i_conf_max, j_conf_max = sftbx.ind2sub(np.shape(confidence_grid), confidence_max_idx)
+    i_conf_max, j_conf_max = np.unravel_index(confidence_max_idx, confidence_grid.shape)
 
     lon_conf_max = score_dict['lon_grid1'][i_conf_max, j_conf_max]
     lat_conf_max = score_dict['lat_grid1'][i_conf_max, j_conf_max]
 
-    dist_squared_grid = (score_dict['lat_grid1'] - lat_conf_max) ** 2 + \
-        (np.cos(np.pi/180 * lat_conf_max) * (score_dict['lon_grid1'] - lon_conf_max)) ** 2 
+    # Compute distance squared without generating multiple intermediate full-size arrays
+    dlat = score_dict['lat_grid1'] - lat_conf_max
+    dlon = score_dict['lon_grid1'] - lon_conf_max
+    cos_lat_factor = np.cos(np.deg2rad(lat_conf_max))
+    dist_squared_grid = np.square(dlat)
+    dist_squared_grid += np.square(cos_lat_factor * dlon)
 
     CONFIDENCE_DIST_DEG = 0.75
-    confidence_score = confidence_max - \
-        np.nanmax(confidence_grid[dist_squared_grid > CONFIDENCE_DIST_DEG ** 2])
+    confidence_score = confidence_max - np.nanmax(confidence_grid[dist_squared_grid > CONFIDENCE_DIST_DEG ** 2])
 
-    alpha = cotbx.confidence_to_alpha(confidence_score, attrib['archer_channel_type'], 0, in_dict['op_vmax'])
-
+    alpha = conversions.confidence_to_alpha(confidence_score, attrib['archer_channel_type'], 0, in_dict['op_vmax'])
 
     # Represent the center fix uncertainty in terms of radius of 50%
     # confidence and radius of 95% confidence
-
     x_arr = np.arange(0, 10, 0.01)
-    cdf_arr = 1 - (alpha * x_arr +1) * np.exp(-alpha * x_arr)
+    cdf_arr = 1 - (alpha * x_arr + 1) * np.exp(-alpha * x_arr)
     nearest_idx = np.argmin(np.abs(cdf_arr - 0.50))
     rad_50 = x_arr[nearest_idx]
     nearest_idx = np.argmin(np.abs(cdf_arr - 0.95))
     rad_95 = x_arr[nearest_idx]
 
-
     # Calculate the probability of having detected an eye (only for 89GHz)
-
     if attrib['archer_channel_type'] == '89GHz':
        eye_prob_stat = confidence_score * ring_score
-       calib_stat_arr = [0, 5, 10, 15, 20,  30,  40,  50,  60,  70,  75,  80]
-       calib_perc_arr = [0, 9, 27, 44, 56,  72,  82,  90,  94,  99, 100, 100]
+       calib_stat_arr = [0, 5, 10, 15, 20, 30, 40, 50, 60, 70,  75,  80]
+       calib_perc_arr = [0, 9, 27, 44, 56, 72, 82, 90, 94, 99, 100, 100]
        eye_prob = np.interp(eye_prob_stat, calib_stat_arr, calib_perc_arr)
     else:
        eye_prob = None
 
-
     # Pack up the output values
-
-    uses_target = sftbx.quality_check(score_dict)
+    uses_target = score_funcs.quality_check(score_dict)
     out_dict['uses_target'] = uses_target
-
     out_dict['archer_channel_type'] = attrib['archer_channel_type']
     out_dict['ring_radius_deg'] = ring_radius_deg
     out_dict['score_by_radius_arr'] = score_by_radius_arr
@@ -241,23 +194,20 @@ def archer4_mw(image, attrib, first_guess, para_fix=True, display_filename=None)
 
     if uses_target:
         # This is an official center-fix
-        out_dict['center_lon'] = nvtbx.antemeridian_restore(lon_combo_max)
-        out_dict['center_lat'] = nvtbx.antemeridian_restore(lat_combo_max)
+        out_dict['center_lon'] = nav_tools.antemeridian_restore(lon_combo_max)
+        out_dict['center_lat'] = nav_tools.antemeridian_restore(lat_combo_max)
         out_dict['weak_center_lon'] = None
         out_dict['weak_center_lat'] = None
-
     else:
         # This is a center-fix if you must, but it's not official because it's probably corrupted
         out_dict['center_lon'] = None
         out_dict['center_lat'] = None
-        out_dict['weak_center_lon'] = nvtbx.antemeridian_restore(lon_combo_max)
-        out_dict['weak_center_lat'] = nvtbx.antemeridian_restore(lat_combo_max)
-
+        out_dict['weak_center_lon'] = nav_tools.antemeridian_restore(lon_combo_max)
+        out_dict['weak_center_lat'] = nav_tools.antemeridian_restore(lat_combo_max)
 
     # Plot test fig
     if display_filename is not None:
-        ditbx.plot_diag_3panel(image, attrib, in_dict, out_dict, score_dict, display_filename=display_filename)
-
- 
+        import matplotlib.pyplot as plt
+        fig = plot_tools.plot_diag_4panel(image, attrib, in_dict, out_dict, score_dict, display_filename=display_filename)
+        plt.close(fig)
     return in_dict, out_dict, score_dict
-

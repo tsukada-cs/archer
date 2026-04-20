@@ -80,8 +80,8 @@ def CalcInten85(sensor, out_dict, score_dict):
     maxCircleBT = 1e12 # Really big number
     bestEyewallBTarr = np.array([])
     for radCircle in np.arange(out_dict['ring_radius_deg'], out_dict['ring_radius_deg']+0.301, 0.05):
-        lonCircle = archerLon + np.cos(np.arange(0,360,5)*np.pi/180) * radCircle / np.cos(np.pi/180*archerLat)
-        latCircle = archerLat + np.sin(np.arange(0,360,5)*np.pi/180) * radCircle
+        lonCircle = archerLon + np.cos(np.deg2rad(np.arange(0,360,5))) * radCircle / np.cos(np.deg2rad(archerLat))
+        latCircle = archerLat + np.sin(np.deg2rad(np.arange(0,360,5))) * radCircle
         circleBTarr = f(list(zip(lonCircle, latCircle)))
         circleBTarrNN = circleBTarr[~np.isnan(circleBTarr)]
         if np.max(circleBTarrNN) < maxCircleBT:
@@ -90,7 +90,7 @@ def CalcInten85(sensor, out_dict, score_dict):
             bestEyewallBTarr = circleBTarr
 
     # Find the highest BT inside that ring
-    ptsInsideRing = ((lonGrid-archerLon)/np.cos(np.pi/180*archerLat))**2 + (latGrid-archerLat)**2 <= bestEyeRadDeg**2
+    ptsInsideRing = ((lonGrid-archerLon)/np.cos(np.deg2rad(archerLat)))**2 + (latGrid-archerLat)**2 <= bestEyeRadDeg**2
     maxEyeBT = np.max(np.concatenate([normalizedDataGrid[ptsInsideRing], bestEyewallBTarr]))
 
     # Calculate the scores as in comboCenterInten

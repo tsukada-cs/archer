@@ -1,25 +1,26 @@
-from __future__ import print_function
+#%%
+import logging
+
+import numpy as np
+
 from archer.archer4_mw  import archer4_mw
 from archer.archer4_visir import archer4_visir
-import archer.utilities.fdeckToolbox as fdtbx
+from archer.utilities import fdeck_tools
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s %(levelname)s %(name)s p%(process)d] %(message)s', datefmt='%d%b %H%M:%S')
 
 
-def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display_filename=None):
-
-    # archer4:
-    #
-    # This function channels the operations into one of the archer4 variants, which have
-    # the same I/O requirements but different internal logic.
-    #
-    # AJW, CIMSS, Apr 2020. *** If you have questions unfortunately I will not answer them. ***
-
+def archer4(image, attrib, first_guess, sector_info=None, alpha=np.deg2rad(5), para_fix=True, display_filename=None):
     """
-    
+    archer4:
+    This function channels the operations into one of the archer4 variants, which have
+    the same I/O requirements but different internal logic.
+    AJW, CIMSS, Apr 2020. *** If you have questions unfortunately I will not answer them. ***
+
     This function inputs three dictionaries and two flags, and outputs three dictionaries, 
     as follows:
-
     ========== Input ==========================================================
-
     image: 2D grids corresponding to the image
         image['lat_grid']:  Latitude grid. See notes.
         image['lon_grid']:  Longitude grid
@@ -27,7 +28,6 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         *image['azm_grid']: Azimuthal direction of beam (available from VIISR and ATMS Level 1B)
         *image['zen_grid']: Zenith angle of beam (available from same)
             *: Optional. Used for highest accuracy parallax calculation if desired.
-
     attrib: Image attributes
         attrib['sat']: Satellite source (NOAA-16, Meteosat-10, F18, Aqua, GOES-16, etc). See notes.
         attrib['sensor']: Sensor instrument (SSMI, Imager, etc). See notes.
@@ -35,7 +35,6 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         attrib['archer_channel_type']: Name of channel according to archer rules. See notes.
         +attrib['nadir_lon']: Nadir longitude (East +).
             +: Necessary for Geo data only. Used for parallax calculation.
-
     first_guess: First guess of the center fix
         *first_guess['source']: Source of first guess estimate (fx, bt, NHCanfx, etc). See notes.
         *first_guess['time']: Time of observation, seconds from epoch at 1 Jan 1970.
@@ -43,19 +42,15 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         first_guess['lat']: Estimated first guess latitute of TC center.
         first_guess['lon']: Estimated first guess longitude of TC center.
             *: Optional. Not used yet, but probably will be brought in later.
-
     sector_info: Dictionary available from GeoIPS (pyresample). Currently this is only used here
         for information passed on to the f-deck output string
         sector_info['storm_basin'] : Two-character basin code
         sector_info['storm_num'] : Two-digit storm code
-
     para_fix: Flag to control whether to apply parallax fix to the imagery. True [or False].
 
     display_filename: Path and filename of diagnostic display image. No image if None.
 
-
     ========== Output =========================================================
-
     in_dict: Variables as used in ARCHER calculations, presented here for diagnostics.
         in_dict['sensor'] = Same as attrib['archer_channel_type']
         in_dict['lon_mx'] = Navigation of image used here (either parallax fixed or not)
@@ -93,9 +88,7 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         score_dict['radial_gradient_4d'] = 4D grid (lat x lon x 2d of gradient) for diagnostics
         score_dict['fraction_input'] = Fraction of domain covered by real image data
 
-
     ========== Notes ===========================================================
-
     1. Image navigation rules:
         a. You must use the original navigation of the image in order to calculate parallax.
         b. Archer can calcuate parallax from a subsection (line and/or element) of a geo image
@@ -110,10 +103,8 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         e. The one exception to all this is if you include image['azm_grid'] and image['zen_grid'] 
             as inputs. Then archer can calculate parallax on any projection or subsection.
 
-
     2. attrib['sat']: Name of the satellite. This is not *yet* used in Archer, but may be
         necessary in the future. Follow the GeoIPS rules for satellite naming.
-
 
     3. attrib['sensor']: One of the following:
         For conical microwave sensors: ['SSMI', 'SSMIS', 'TMI', 'GMI', 'AMSRE', 'AMSR2']
@@ -121,11 +112,9 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         For polar imagers: ['VIIRS'] (Add AVHRR?)
         For geo imagers: ['Imager']
 
-
     4. attrib['archer_channel_type']: One of these valid strings: ['37GHz', '89GHz', '183GHz',
         'IR', 'SWIR', 'Vis', 'DNB']
         Used for directing channel-specific logic in archer.
-
 
     5. first_guess['source']: One of these strings:
         'fx': Forecast
@@ -135,33 +124,34 @@ def archer4(image, attrib, first_guess, sector_info=None, para_fix=True, display
         'NHCfxan': Splice of NHC-generated analysis and forecast track
         This variable is for nothing yet, but it may be needed in the future.
 
-
     6. For more context on these methods, please refer to:
-
-            Wimmers, A. J., and C. S. Velden, 2016: Advancements in objective multisatellite 
-            tropical cyclone center fixing. J. Appl. Meteor. Climatol., 55, 197–212.
+        Wimmers, A. J., and C. S. Velden, 2016: Advancements in objective multisatellite 
+        tropical cyclone center fixing. J. Appl. Meteor. Climatol., 55, 197–212.
 
     """
-
-
     if 'GHz' in attrib['archer_channel_type']:
-
         in_dict, out_dict, score_dict = archer4_mw(
-            image, attrib, first_guess, para_fix=para_fix, display_filename=display_filename)
-
+            image, 
+            attrib, 
+            first_guess, 
+            alpha=alpha, 
+            para_fix=para_fix, 
+            display_filename=display_filename
+        )
     else:
-
         in_dict, out_dict, score_dict = archer4_visir(
-            image, attrib, first_guess, para_fix=para_fix, display_filename=display_filename)
-
-    # In the future, add an option for archer4_scat
-
+            image, 
+            attrib, 
+            first_guess, 
+            alpha=alpha, 
+            para_fix=para_fix, 
+            display_filename=display_filename
+        )
+    # TODO: add an option for archer4_scat
 
     # Produce an fdeck-formatted string
-    fdeck_str = fdtbx.generate_string(attrib, in_dict, out_dict, sector_info=sector_info)
-    print('fdeck output:')
-    print(fdeck_str)
+    fdeck_str = fdeck_tools.generate_string(attrib, in_dict, out_dict, sector_info=sector_info)
+    logger.info('fdeck output:')
+    logger.info(fdeck_str)
     out_dict['fdeck_string'] = fdeck_str
-
-
     return in_dict, out_dict, score_dict
