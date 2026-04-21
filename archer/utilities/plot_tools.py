@@ -1,6 +1,7 @@
 #%%
 import os
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any
 
 import numpy as np
@@ -13,19 +14,13 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s %(levelname)s %(nam
 
 
 def pcolorCenterShift(xGrid, yGrid, zGrid):
-    xGrid = np.concatenate((1.5*xGrid[0:1,:] - 0.5*xGrid[1:2,:], 0.5*xGrid[0:-1,:] + 0.5*xGrid[1:,:], 1.5*xGrid[-1:,:] - 0.5*xGrid[-2:-1,:]), axis=0)
-    yGrid = np.concatenate((1.5*yGrid[0:1,:] - 0.5*yGrid[1:2,:], 0.5*yGrid[0:-1,:] + 0.5*yGrid[1:,:], 1.5*yGrid[-1:,:] - 0.5*yGrid[-2:-1,:]), axis=0)
-    
-    xGrid = np.concatenate((1.5*xGrid[:,0:1] - 0.5*xGrid[:,1:2], 0.5*xGrid[:,0:-1] + 0.5*xGrid[:,1:], 1.5*xGrid[:,-1:] - 0.5*xGrid[:,-2:-1]), axis=1)
-    yGrid = np.concatenate((1.5*yGrid[:,0:1] - 0.5*yGrid[:,1:2], 0.5*yGrid[:,0:-1] + 0.5*yGrid[:,1:], 1.5*yGrid[:,-1:] - 0.5*yGrid[:,-2:-1]), axis=1)
-    
-    zGrid = np.concatenate((zGrid, np.nan * zGrid[-1:,:]), axis=0)
-    zGrid = np.concatenate((zGrid, np.nan * zGrid[:,-1:]), axis=1)
+    xGrid = np.pad(xGrid, ((1,1), (1,1)), mode='edge')
+    yGrid = np.pad(yGrid, ((1,1), (1,1)), mode='edge')
+    zGrid = np.pad(zGrid, ((1,1), (1,1)), mode='edge')
     return xGrid, yGrid, zGrid
 
 def pcolorCenterShiftDataOnly(zGrid):
-    zGrid = np.concatenate((zGrid, np.nan * zGrid[-1:,:]), axis=0)
-    zGrid = np.concatenate((zGrid, np.nan * zGrid[:,-1:]), axis=1)
+    zGrid = np.pad(zGrid, ((1,1), (1,1)), mode='edge')
     return zGrid
 
 def discrete_cmap(N, base_cmap=None):
@@ -102,9 +97,9 @@ def plot_diag_4panel(
     rs_max_lat = score_dict['lat_grid1'][i_rs_max, j_rs_max]
 
     fig, ax = plt.subplots(2, 2, figsize=(7.5, 8), gridspec_kw=dict(hspace=0.0))
-    op_scatter_kwargs = dict(s=100, marker="+", c="k", lw=1.0, zorder=2.1)
+    op_scatter_kwargs = dict(s=80, marker="+", c="#333333", lw=1.0, zorder=2.1)
     spiral_scatter_kwargs = dict(s=40, marker="o", ec="green", fc='none', lw=0.8, zorder=2.1)
-    ring_scatter_kwargs = dict(s=40, marker="D", ec="blue", fc='none', lw=0.8, zorder=2.1)
+    ring_scatter_kwargs = dict(s=40, marker="x", c="purple", lw=0.8, zorder=2.1)
     final_scatter_kwargs = dict(s=40, marker="s", ec="k", fc='none', lw=1.2, zorder=2.1)
 
     # Storm synoptic view
@@ -173,7 +168,7 @@ def plot_diag_4panel(
     ax.flat[3].scatter(rs_max_lon, rs_max_lat, **ring_scatter_kwargs)
     ax.flat[3].scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
 
-    if not np.isnan(out_dict['center_lon']):
+    if out_dict['uses_target']:
         circle = mpatches.Circle(
             (out_dict['center_lon'], out_dict['center_lat']),
             out_dict['ring_radius_deg'],
@@ -198,8 +193,6 @@ def plot_diag_4panel(
     ax.flat[3].scatter([], [], **spiral_scatter_kwargs, label='Spiral max')
     ax.flat[3].scatter([], [], **ring_scatter_kwargs, label='Ring max')
     ax.flat[3].scatter([], [], marker='o', edgecolor='m', facecolor='none', lw=1.5, label="Ring")
-    
-    # Legend
     ax.flat[3].legend(
         frameon=False,
         loc='upper center',
@@ -210,7 +203,8 @@ def plot_diag_4panel(
     )
 
     # Suptitle
-    title = f'[{attrib["archer_channel_type"]}] Vmax = {in_dict["op_vmax"]} kt'
+    time_str = datetime.fromtimestamp(in_dict["time"]).strftime('%Y-%m-%d %H:%M UTC')
+    title = f'[{attrib["archer_channel_type"]}] {time_str}  Vmax = {in_dict["op_vmax"]} kt'
     fig.suptitle(title, y=0.91)
 
     # All axes

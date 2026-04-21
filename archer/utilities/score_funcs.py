@@ -15,7 +15,13 @@ def distance_deg(lon1, lat1, lon2, lat2):
     lon_dist_deg = (lon1 - lon2) * np.cos(np.deg2rad(avg_lat))
     return np.hypot(lat_dist_deg, lon_dist_deg)
 
-def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradient_mode="sobel"):
+def combo_parts_calc_3_0(
+    mi_dict, 
+    penalty_weight=1.0, 
+    mask_val=None,
+    alpha=np.deg2rad(5), 
+    gradient_mode="sobel",
+):
     """
     Calculate the spiral and ring scores for a given microwave imager dictionary.
 
@@ -34,7 +40,7 @@ def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradi
         Dictionary containing the spiral and ring scores.
     """
     # Resampling, spiral and ring parameters
-    if mi_dict['sensor'] in ('89GHz', '37GHz', '183GHz'):
+    if mi_dict['sensor'].lower() in ('89ghz', '37ghz', '183ghz'):
         LON_INC = 0.05
         LAT_INC = 0.05
         PERIM_DEG = 1.6
@@ -59,7 +65,7 @@ def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradi
     MIN_RADIUS_DEG = 0.05
 
     # Remove any false data
-    if mi_dict['sensor'] in ('89GHz', '37GHz',  '183GHz', 'IR'):
+    if mi_dict['sensor'].lower() in ('89ghz', '37ghz', '183ghz', 'ir'):
         with np.errstate(invalid='ignore'):
             mi_dict['bt_mx'][(mi_dict['bt_mx'] < 80)] = np.nan
 
@@ -93,7 +99,8 @@ def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradi
     #    (x_grid_offset_gcd, y_grid_offset_gcd), 'linear')
 
     lon_mx_buff, lat_mx_buff, bt_mx_buff = interp_tools.add_edge_buffer(
-        mi_dict['lon_mx'], mi_dict['lat_mx'], mi_dict['bt_mx'], 'linear')
+        mi_dict['lon_mx'], mi_dict['lat_mx'], mi_dict['bt_mx'], 'linear'
+    )
     # lon_mx_buff, lat_mx_buff, bt_mx_buff = (mi_dict['lon_mx'], mi_dict['lat_mx'], mi_dict['bt_mx'])
     x_flat = lon_mx_buff.ravel()
     y_flat = lat_mx_buff.ravel()
@@ -109,19 +116,21 @@ def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradi
 
     # Spiral center
     logger.info('Calculating spiral center ...')
-    sp_grid1, fraction_input = spiral_center_calc(
-        x_grid_offset_gcd, 
-        y_grid_offset_gcd, 
-        data_grid1, 
-        mi_dict['sensor'], 
-        mi_dict['op_lon'], 
-        mi_dict['op_lat'], 
-        FILTER_RADIUS_DEG, 
-        SPIRAL_SEARCH_RADIUS_DEG, 
-        SPRIAL_SPACING_DEG,
-        alpha=alpha,
-        gradient_mode=gradient_mode
-    )
+    spiral_center_calc_args = {
+        'x_grid_offset_gcd': x_grid_offset_gcd,
+        'y_grid_offset_gcd': y_grid_offset_gcd,
+        'data_grid1': data_grid1,
+        'sensor_type': mi_dict['sensor'],
+        'op_lon': mi_dict['op_lon'],
+        'op_lat': mi_dict['op_lat'],
+        'filter_radius_deg': FILTER_RADIUS_DEG,
+        'spiral_search_radius_deg': SPIRAL_SEARCH_RADIUS_DEG,
+        'spiral_spacing_deg': SPRIAL_SPACING_DEG,
+        'alpha': alpha,
+        'mask_val': None,
+        'gradient_mode': gradient_mode,
+    }
+    sp_grid1, fraction_input = spiral_center_calc(**spiral_center_calc_args)
     spiral_score_grid = SPIRAL_WEIGHT * sp_grid1 - SPIRAL_OFFSET
 
     # Add in the penalty for distance from first guess
@@ -139,8 +148,7 @@ def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradi
     # logger.info(f'np.sum(is_inside_buffer) = {np.sum(is_inside_buffer)}')
     # logger.info(is_inside_buffer[::8, ::8])
 
-    # Expand the buffer by SWARM_REACH:
-    # I had to change this on from the matlab version, which was too matlaby
+    # Expand the buffer by SWARM_REACH
     valid_lons = lon_grid1[is_inside_buffer]
     valid_lats = lat_grid1[is_inside_buffer]
     
@@ -174,9 +182,11 @@ def combo_parts_calc_3_0(mi_dict, penalty_weight=1.0, alpha=np.deg2rad(5), gradi
         is_in_bounds, 
         MIN_RADIUS_DEG, 
         MAX_RADIUS_DEG,
+        mask_val=mask_val,
         gradient_mode=gradient_mode
     )
-
+    
+    # Create score dictionary
     combo_score_dict = {}
     combo_score_dict['lon_grid1'] = lon_grid1
     combo_score_dict['lat_grid1'] = lat_grid1
@@ -200,21 +210,24 @@ def spiral_center_calc(
     filter_radius_deg, 
     spiral_search_radius_deg, 
     spiral_spacing_deg,
+    mask_val=None,
     alpha=np.deg2rad(5),
     gradient_mode="sobel"
 ):
     # Sensor-specfic settings
-    if sensor_type == '37GHz':
+    if sensor_type.lower() == '37ghz':
         outside_factor = 0.62
         data_grid1 = -data_grid1
-    elif sensor_type == 'IR' or sensor_type == 'Vis':
+    elif sensor_type.lower() in ('ir', 'vis'):
         outside_factor = 0.50
     else:
         outside_factor = 0.62
 
     # Cut down to a usable disk, surrounded by nans
     in_filter_disk = x_grid_offset_gcd**2 + y_grid_offset_gcd**2 <= filter_radius_deg**2
-    disk_img = np.nan * data_grid1
+    if mask_val is not None:
+        in_filter_disk = in_filter_disk & (data_grid1 >= mask_val)
+    disk_img = np.full_like(data_grid1, np.nan)
     disk_img[in_filter_disk] = data_grid1[in_filter_disk]
 
     # Make 1D arrays of just the clean points. "clean" means no nans
@@ -251,16 +264,16 @@ def spiral_center_calc(
     valid_x_off = all_center_xs[valid_mask]
     valid_y_off = all_center_ys[valid_mask]
     
-    chunk_size = 100
+    CHUNK_SIZE = 100
     valid_scores = np.zeros(len(valid_x_off))
     
     # Pre-calculate constant scalar values outside the loop to optimize performance
     sign_lat = np.sign(op_lat)
     sqrt_alpha_factor = np.sqrt(1 + alpha**2)
     
-    for i in range(0, len(valid_x_off), chunk_size):
-        x_off_chunk = valid_x_off[i:i+chunk_size, np.newaxis]
-        y_off_chunk = valid_y_off[i:i+chunk_size, np.newaxis]
+    for i in range(0, len(valid_x_off), CHUNK_SIZE):
+        x_off_chunk = valid_x_off[i:i+CHUNK_SIZE, np.newaxis]
+        y_off_chunk = valid_y_off[i:i+CHUNK_SIZE, np.newaxis]
 
         proxy_x_clean = x_grid_offset_gcd_clean[np.newaxis, :] - x_off_chunk
         proxy_y_clean = y_grid_offset_gcd_clean[np.newaxis, :] - y_off_chunk
@@ -274,21 +287,22 @@ def spiral_center_calc(
         raw_cross_score = spiral_x_clean * grad_n_log_clean[np.newaxis, :] - spiral_y_clean * grad_e_log_clean[np.newaxis, :]
 
         cross_score_clean = np.maximum(0, -raw_cross_score) + outside_factor * np.maximum(0, raw_cross_score)
-        
+
         is_nan_cross = np.isnan(raw_cross_score)
         cross_score_clean[is_nan_cross] = np.nan
-        valid_scores[i:i+chunk_size] = np.nanmean(cross_score_clean, axis=1)
+        valid_scores[i:i+CHUNK_SIZE] = np.nanmean(cross_score_clean, axis=1)
+
     all_center_mean_cross[valid_mask] = valid_scores
 
     # 2. Search for the best full-resolution grid cell by (cubic?) interpolation
     sp_grid = interp_tools.interp_section_to_global_rect_grid(
-        all_center_xs, all_center_ys, all_center_mean_cross, 
+        all_center_xs, all_center_ys, all_center_mean_cross,
         x_grid_offset_gcd[0,:], y_grid_offset_gcd[:,0], 'linear'
     )
 
     # Clean out the dodgy edge values
     sp_grid[x_grid_offset_gcd**2 + y_grid_offset_gcd**2 >= spiral_search_radius_deg**2] = np.nan
-    fraction_input = len(disk_img_clean) / np.sum(in_filter_disk)
+    fraction_input = disk_img_clean.size / np.sum(in_filter_disk)
     return sp_grid, fraction_input
 
 def ring_score_calc(
@@ -299,6 +313,7 @@ def ring_score_calc(
     is_in_bounds, 
     min_radius_deg, 
     max_radius_deg,
+    mask_val=None,
     gradient_mode="sobel"
 ):
     # Parameters
@@ -325,9 +340,9 @@ def ring_score_calc(
 
     # Initialize variables related to the score grids
     n_rows, n_cols = np.shape(data_grid1)
-    ring_score_grid = np.nan * np.zeros(np.shape(data_grid1))
+    ring_score_grid = np.full(np.shape(data_grid1), np.nan)
     ring_radius_grid = np.zeros(np.shape(data_grid1))
-    max_eye_bt_grid = np.nan * np.zeros(np.shape(data_grid1))
+    max_eye_bt_grid = np.full(np.shape(data_grid1), np.nan)
 
     # Unit vectors pointed radially inward
     ring_unit_vector_x = -np.cos(np.deg2rad(ang_deg_arr))
@@ -339,22 +354,23 @@ def ring_score_calc(
     off_col_grid, off_row_grid = np.meshgrid(range(0, n_cols) - mid_col, range(0, n_rows) - mid_row) # -32...32
 
     # Convert offset grids to offset arrays
-    is_in_radius_range = x_grid_offset_gcd**2 + y_grid_offset_gcd**2 < (max_radius_deg + deg_per_pix)**2
-    off_col_pts = off_col_grid[is_in_radius_range]
-    off_row_pts = off_row_grid[is_in_radius_range]
-    off_x_pts = x_grid_offset_gcd[is_in_radius_range]
-    off_y_pts = y_grid_offset_gcd[is_in_radius_range]
+    valid_mask = x_grid_offset_gcd**2 + y_grid_offset_gcd**2 < (max_radius_deg + deg_per_pix)**2
+    if mask_val is not None:
+        valid_mask = valid_mask & (data_grid1 >= mask_val)
+    off_col_pts = off_col_grid[valid_mask]
+    off_row_pts = off_row_grid[valid_mask]
+    off_x_pts = x_grid_offset_gcd[valid_mask]
+    off_y_pts = y_grid_offset_gcd[valid_mask]
 
     # Build the score grids. Iterate by radius, and within that, iterate by location
     print('Radius (deg) = ', end='')
     rax = np.arange(min_radius_deg, max_radius_deg+1e-6, 0.05)
 
     # Extra part for ERC calcs
-    n_rad = len(rax)
-    ring_score_grid_full = np.zeros((n_rows, n_cols, n_rad)) * np.nan
-    radial_gradient_4d = np.zeros((n_rows, n_cols, n_rad, na)) * np.nan
+    ring_score_grid_full = np.full((n_rows, n_cols, rax.size), np.nan)
+    radial_gradient_4d = np.full((n_rows, n_cols, rax.size, na), np.nan)
 
-    for rad_idx in reversed(range(n_rad)):
+    for rad_idx in reversed(range(rax.size)):
         radius_deg = rax[rad_idx]
         print(f'{radius_deg:4.2f}', end=' ')
 
@@ -423,17 +439,17 @@ def ring_score_calc(
         y_flat = y_grid_offset_gcd.ravel()
         data_flat = data_grid1.ravel()
         
-        chunk_sz = 500
-        for idx in range(0, len(valid_i), chunk_sz):
-            i_chk = valid_i[idx:idx+chunk_sz]
-            j_chk = valid_j[idx:idx+chunk_sz]
-            r_chk = radii[idx:idx+chunk_sz, np.newaxis]
-            x_chk = x_cents[idx:idx+chunk_sz, np.newaxis]
-            y_chk = y_cents[idx:idx+chunk_sz, np.newaxis]
-            
+        CHUNK_SIZE = 500
+        for idx in range(0, len(valid_i), CHUNK_SIZE):
+            i_chk = valid_i[idx:idx+CHUNK_SIZE]
+            j_chk = valid_j[idx:idx+CHUNK_SIZE]
+            r_chk = radii[idx:idx+CHUNK_SIZE, np.newaxis]
+            x_chk = x_cents[idx:idx+CHUNK_SIZE, np.newaxis]
+            y_chk = y_cents[idx:idx+CHUNK_SIZE, np.newaxis]
+
             dist_sq = (x_flat[np.newaxis, :] - x_chk)**2 + (y_flat[np.newaxis, :] - y_chk)**2
             mask = dist_sq <= r_chk**2
-            
+
             for k in range(len(i_chk)):
                 if np.any(mask[k]):
                     max_eye_bt_grid[i_chk[k], j_chk[k]] = np.nanmax(data_flat[mask[k]])
@@ -449,31 +465,26 @@ def ring_score_calc(
     ring_score_dict['radial_gradient_4d'] = radial_gradient_4d
     return ring_score_dict
 
+def quality_check(spiral_score_grid, fraction_input, coverage_threshold=0.5):
+    """
+    Check if the best center is reliable.
 
-def quality_check(score_dict):
-    n_rows, n_cols = np.shape(score_dict['spiral_score_grid'])
-    # Avoid explicitly adding 0 and utilize fast in-place np.nan_to_num on a copy
-    spiral_score_grid = np.nan_to_num(score_dict['spiral_score_grid'], nan=-1e9, copy=True)
-    max_idx = np.argmax(spiral_score_grid)
-    i_max_score, j_max_score = np.unravel_index(max_idx, (n_rows, n_cols))
+    Returns
+    -------
+    uses_target : bool
+        True if the best center is reliable, False otherwise.
+    """
+    if fraction_input < coverage_threshold:
+        return False
 
-    if score_dict['fraction_input'] < 0.5:
-        uses_target = False
-    elif np.isnan(spiral_score_grid[i_max_score, j_max_score]):
-        uses_target = False
-    elif i_max_score <= 1 or j_max_score <= 1:
-        uses_target = False
-    elif i_max_score >= n_rows-2 or j_max_score >= n_cols-2:
-        uses_target = False
-    elif np.isnan(spiral_score_grid[i_max_score-2, j_max_score]):
-        uses_target = False
-    elif np.isnan(spiral_score_grid[i_max_score+2, j_max_score]):
-        uses_target = False
-    elif np.isnan(spiral_score_grid[i_max_score, j_max_score-2]):
-        uses_target = False
-    elif np.isnan(spiral_score_grid[i_max_score, j_max_score+2]):
-        uses_target = False
-    else:
-        uses_target = True
-    return uses_target
-# %%
+    i_max_score, j_max_score = np.unravel_index(
+        np.nanargmax(spiral_score_grid), 
+        spiral_score_grid.shape
+    )
+    if i_max_score <= 1 or j_max_score <= 1:
+        return False
+    if i_max_score >= spiral_score_grid.shape[0]-2 or j_max_score >= spiral_score_grid.shape[1]-2:
+        return False
+    if np.isnan(spiral_score_grid[i_max_score-2:i_max_score+3, j_max_score-2:j_max_score+3]).any():
+        return False
+    return True

@@ -117,21 +117,24 @@ def extrap_rowN(xMx, yMx):
 
 def parallax_fix_conical(lon_grid, lat_grid, sensor, structure_height_km):
     km_per_gcd = np.deg2rad(6370)
-    if sensor == 'SSMI':
+    if sensor.lower() == 'ssmi':
         view_angle_deg = 53.1
         flip_elements = False
-    elif sensor == 'SSMIS':
+    elif sensor.lower() == 'ssmis':
         view_angle_deg = 53.1
         flip_elements = True
-    elif sensor == 'TMI':
+    elif sensor.lower() == 'tmi':
         view_angle_deg = 53.1
         flip_elements = False
-    elif sensor == 'AMSRE' or sensor == 'AMSR2':
+    elif sensor.lower() in ('amsre', 'amsr2'):
         view_angle_deg = 55.2
         flip_elements = True
-    elif sensor == 'GMI':
+    elif sensor.lower() == 'gmi':
         view_angle_deg = 52.8
         flip_elements = True
+    else:
+        logger.error(f'Unknown sensor: {sensor}')
+        return lon_grid, lat_grid
 
     # Calculate nudges and nudge the image to make a first-approximation correction for
     # parallax *according to the most important features in the image*
@@ -195,33 +198,36 @@ def parallax_fix_crosstrack(
     this_dir = os.path.dirname(os.path.realpath(__file__))
     etc_dir = os.path.join(this_dir, '../etc/')
 
-    if sensor == 'ATMS':
+    if sensor.lower() == 'atms':
         scan_angle_arr = np.abs(np.linspace(-52.77, 52.77, 96))
         nadir_lon_arr = np.mean(lon_grid[:, 47:48], axis=1) # Correct row/col?
         nadir_lat_arr = np.mean(lat_grid[:, 47:48], axis=1)
         scan_angle_grid, nadir_lon_grid = np.meshgrid(scan_angle_arr, nadir_lon_arr)
         _              , nadir_lat_grid = np.meshgrid(scan_angle_arr, nadir_lat_arr)
-    elif sensor == 'AMSU-B' or sensor == 'MHS':
+    elif sensor.lower() in ('amsub', 'mhs'):
         scan_angle_arr = pd.read_csv(
             os.path.join(etc_dir, 'amsub90scanangles.csv'), header=None)
         nadir_lon_arr = np.mean(lon_grid[:, 44:45], axis=1)
         nadir_lat_arr = np.mean(lat_grid[:, 44:45], axis=1)
         scan_angle_grid, nadir_lon_grid = np.meshgrid(scan_angle_arr, nadir_lon_arr)
         _              , nadir_lat_grid = np.meshgrid(scan_angle_arr, nadir_lat_arr)
-    elif sensor == 'VIIRS' and archer_channel_type == 'DNB':
+    elif sensor.lower() == 'viirs' and archer_channel_type.lower() == 'dnb':
         scan_angle_arr = pd.read_csv(
             os.path.join(etc_dir, 'viisr_4064scanangles.csv'), header=None)
         nadir_lon_arr = np.mean(lon_grid[:, 2031:2032], axis=1)
         nadir_lat_arr = np.mean(lat_grid[:, 2031:2032], axis=1)
         scan_angle_grid, nadir_lon_grid = np.meshgrid(scan_angle_arr, nadir_lon_arr)
         _              , nadir_lat_grid = np.meshgrid(scan_angle_arr, nadir_lat_arr)
-    elif sensor == 'VIIRS':
+    elif sensor.lower() == 'viirs':
         scan_angle_arr = pd.read_csv(
             os.path.join(etc_dir, 'viisr_6400scanangles.csv'), header=None)
         nadir_lon_arr = np.mean(lon_grid[:, 3199:3200], axis=1)
         nadir_lat_arr = np.mean(lat_grid[:, 3199:3200], axis=1)
         scan_angle_grid, nadir_lon_grid = np.meshgrid(scan_angle_arr, nadir_lon_arr)
         _              , nadir_lat_grid = np.meshgrid(scan_angle_arr, nadir_lat_arr)
+    else:
+        logger.error(f'Unknown sensor: {sensor}')
+        return lon_grid, lat_grid
 
     # Calculate the distance of nudging to correct for parallax
     delX_m = 1000 * structure_height_km * np.tan(np.deg2rad(scan_angle_grid))
