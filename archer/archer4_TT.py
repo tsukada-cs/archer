@@ -107,7 +107,7 @@ def _get_combined_score_dict(in_dict, mask_val, alpha):
     # Calculate combo score, target point
     confidence_grid = score_dict['spiral_score_grid'] + in_dict['ring_weight'] * score_dict['ring_score_grid']
     score_dict['combo_score_grid'] = confidence_grid - score_dict['penalty_grid']
-    return confidence_grid, score_dict
+    return score_dict, confidence_grid
 
 def _calc_confidence_score(confidence_grid, score_dict, confidence_dist_deg=0.75):
     """Calculate confidence score using combo grid w/o the distance penalty"""
@@ -343,6 +343,7 @@ def archer4(
         score_dict = score_dict_wo_mask
         confidence_grid = conf_grid_wo_mask
         in_dict["mask_val"] = None
+        out_dict["masked"] = False
     else:
         # Try with masking but without parallax correction
         mask_val = _get_mask_val(attrib['archer_channel_type'])
@@ -363,18 +364,21 @@ def archer4(
             score_dict = score_dict_w_mask
             confidence_grid = conf_grid_w_mask
             in_dict["mask_val"] = mask_val
+            out_dict["masked"] = True
         else:
             out_dict['uses_target'] = False
             if np.max(score_dict_w_mask["combo_score_grid"]) > np.max(score_dict_wo_mask["combo_score_grid"]):
                 score_dict = score_dict_w_mask
                 confidence_grid = conf_grid_w_mask
                 in_dict["mask_val"] = mask_val
+                out_dict["masked"] = True
             else:
                 in_dict['lon_mx'] = image['lon_pc_grid']
                 in_dict['lat_mx'] = image['lat_pc_grid']
                 score_dict = score_dict_wo_mask
                 confidence_grid = conf_grid_wo_mask
                 in_dict["mask_val"] = None
+                out_dict["masked"] = False
 
     # Determine the location of the maximum combo score
     i_max_score, j_max_score = np.unravel_index(np.argmax(score_dict['combo_score_grid']), score_dict['combo_score_grid'].shape)
@@ -390,7 +394,7 @@ def archer4(
     out_dict['confidence_score'] = _calc_confidence_score(confidence_grid, score_dict, confidence_dist_deg=0.75)
     out_dict['alpha_parameter'] = conversions.confidence_to_alpha(out_dict['confidence_score'], attrib['archer_channel_type'], 0, in_dict['op_vmax'])
     radius_err_range = np.arange(0, 10, 0.01) # in degrees
-    cdf = 1 - (out_dict['alpha_parameter'] * radius_err_range + 1) * np.exp(-out_dict['alpha_parameter'] * radius_err_range)
+    cdf = 1.0 - (out_dict['alpha_parameter'] * radius_err_range + 1.0) * np.exp(-out_dict['alpha_parameter'] * radius_err_range)
 
     RECORDED_CONFIDENCE_LEVELS = [0.50, 0.95]
     for level in RECORDED_CONFIDENCE_LEVELS:
