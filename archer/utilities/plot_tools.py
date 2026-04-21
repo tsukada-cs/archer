@@ -2,9 +2,10 @@
 import os
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import cm
@@ -203,7 +204,7 @@ def plot_diag_4panel(
     )
 
     # Suptitle
-    time_str = datetime.fromtimestamp(in_dict["time"]).strftime('%Y-%m-%d %H:%M UTC')
+    time_str = pd.to_datetime(in_dict["time"]).strftime('%Y-%m-%d %H:%M UTC')
     title = f'[{attrib["archer_channel_type"]}] {time_str}  Vmax = {in_dict["op_vmax"]} kt'
     fig.suptitle(title, y=0.91)
 

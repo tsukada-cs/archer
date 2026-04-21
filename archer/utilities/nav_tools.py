@@ -1,6 +1,5 @@
 #%%
 import os
-import time
 import logging
 
 import numpy as np
@@ -249,7 +248,7 @@ def parallax_fix_allnav(lon_grid, lat_grid, zenGrid, azmGrid, structure_height_k
     new_lon_grid, new_lat_grid, _ = geod.fwd(lon_grid, lat_grid, azmGrid, -delX_m)
     return new_lon_grid, new_lat_grid
 
-def cos_solar_zenith(lon_grid, lat_grid, time_epoch_secs):
+def cos_solar_zenith(lon_grid, lat_grid, datetime):
     """
     Calculates cosine of solar zenith angle over a grid of points
     Reference: http://en.wikipedia.org/wiki/Insolation
@@ -260,18 +259,18 @@ def cos_solar_zenith(lon_grid, lat_grid, time_epoch_secs):
     AJW (2011)
     """
     # Relevant times
-    img_time = time.gmtime(time_epoch_secs)
-    hr_float = img_time.tm_hour + img_time.tm_min/60 + img_time.tm_sec/3600
+    img_time = pd.to_datetime(datetime)
+    hr_float = img_time.hour + img_time.minute/60.0 + img_time.second/3600.0
 
     # Terms from the wiki Insolation page:
     # Obliquity of the earth (degrees)
     eta = 23.4398
 
     # Declination of the earth (degrees)
-    delta = eta * np.sin(np.deg2rad((284 + img_time.tm_yday) / 365 * 360))
+    delta = eta * np.sin(np.deg2rad((284 + img_time.dayofyear) / 365.0 * 360.0))
 
     # Angle relative to peak insolation longitude (hours*deg/hr)
-    h = lon_grid + (hr_float - 12) * 15 
+    h = lon_grid + (hr_float - 12.0) * 15.0 
     
     # Pre-calculate trigonometric arrays to avoid repetitive deg2rad over full grids
     lat_rad = np.deg2rad(lat_grid)

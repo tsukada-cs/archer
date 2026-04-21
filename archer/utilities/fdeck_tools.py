@@ -1,8 +1,6 @@
 #%%
-import datetime
-
 import numpy as np
-
+import pandas as pd
 
 def generate_string(attrib, in_dict, out_dict, sector_info=None):
     if sector_info is not None:
@@ -13,7 +11,7 @@ def generate_string(attrib, in_dict, out_dict, sector_info=None):
         bn = 'BB'
         cy = 'NN'
 
-    image_dt = datetime.datetime.utcfromtimestamp(in_dict['time'])
+    image_dt = pd.to_datetime(in_dict['time'])
     YYYYMMDDHHMM = image_dt.strftime('%y%m%d%H%M')
     fix_format = ' 70'
     # Convert strings for fix_type

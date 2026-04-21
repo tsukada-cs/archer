@@ -158,7 +158,7 @@ def archer4(
     first_guess: dict[str, str | float | bool | dict[str, str | float | bool]]
         First guess of the center fix
         *first_guess['source']: Source of first guess estimate (fx, bt, NHCanfx, etc). See notes.
-        *first_guess['time']: Time of observation, seconds from epoch at 1 Jan 1970.
+        *first_guess['time']: datetime object
         first_guess['vmax']: Estimated Vmax of the TC.
         first_guess['lat']: Estimated first guess latitute of TC center.
         first_guess['lon']: Estimated first guess longitude of TC center.
@@ -180,7 +180,7 @@ def archer4(
         in_dict['lon_mx'] = Navigation of image used here (either parallax fixed or not)
         in_dict['lat_mx'] = "
         in_dict['bt_mx'] = Image data, either in BT or pseudo-BT
-        in_dict['time'] = Time of the image, not used by ARCHER.
+        in_dict['time'] = Time of the image
         in_dict['op_lon'] = Same as first_guess['lon']
         in_dict['op_lat'] = Same as first_guess['lat']
         in_dict['op_vmax'] = Same as first_guess['vmax']
@@ -200,6 +200,7 @@ def archer4(
         out_dict['center_lat'] = ARCHER center fix latitude
         out_dict['weak_center_lon'] = Last-resort center fix that violates some rules
         out_dict['weak_center_lat'] = "
+        out_dict['masked'] = Whether the image was masked
 
     score_dict: dict[str, np.ndarray]
         Intermediate products of ARCHER, for diagnostics and dependent algorithms.
