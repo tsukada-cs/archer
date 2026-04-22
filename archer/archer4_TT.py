@@ -24,7 +24,7 @@ def _dilate_nan(bt_mx, dilate_val=2):
 
 def _get_ring_weight(channel_type, vmax):
     """Get ring weight for a given channel type"""
-    if channel_type.lower() in ('ir', 'swir'):
+    if channel_type.lower() in ('ir', 'swir', 'vis', 'dnb'):
         return _get_ring_weight_visir(channel_type)
     elif channel_type.lower() in ('89ghz', '37ghz', '183ghz'):
         return _get_ring_weight_mw(vmax)
