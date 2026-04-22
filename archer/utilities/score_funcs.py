@@ -3,6 +3,8 @@ import logging
 
 import numpy as np
 import scipy.ndimage as ndi
+from scipy.spatial import cKDTree
+
 from archer.utilities import interp_tools
 
 
@@ -71,41 +73,40 @@ def combo_parts_calc_3_0(
 
     # Resample the swath to a regular grid, centred on the fx point, and with 
     # the correct aspect ratio at the fx point
-    # lon_mx_offset = (mi_dict['lon_mx'] - mi_dict['op_lon']) * np.cos(np.deg2rad(mi_dict['op_lat']))
-    # lat_mx_offset = mi_dict['lat_mx'] - mi_dict['op_lat']
-    # good_points = np.logical_and(~np.isnan(lon_mx_offset), ~np.isnan(lat_mx_offset))
-    # lon_mx_offset_nn = lon_mx_offset[good_points]
-    # lat_mx_offset_nn = lat_mx_offset[good_points]
-    # bth_mx_nn = mi_dict['bth_mx'][good_points]
-
-    # Represent data as a regular grid centered at (0,0). This is not the prettiest approach, but
-    # it stays faithful to the legacy code.
     x_arr_offset_gcd = np.arange(-PERIM_DEG, PERIM_DEG+1e-6, LON_INC)
     y_arr_offset_gcd = np.arange(PERIM_DEG, -PERIM_DEG-1e-6, -LAT_INC)
     x_grid_offset_gcd, y_grid_offset_gcd = np.meshgrid(x_arr_offset_gcd, y_arr_offset_gcd)
-    lon_arr1 = x_arr_offset_gcd / np.cos(np.deg2rad(mi_dict['op_lat'])) + mi_dict['op_lon']
     lat_arr1 = y_arr_offset_gcd + mi_dict['op_lat']
-    lon_grid1, lat_grid1 = np.meshgrid(lon_arr1, lat_arr1)
-    """
-    data_grid1 = interp_tools.interp_section_to_global_rect_grid(
-        lon_mx_offset, lat_mx_offset, mi_dict['bt_mx'], x_arr_offset_gcd, y_arr_offset_gcd,
-        interp_type='linear') # Doesn't work somehow
-    """
-    from scipy.interpolate import griddata
-    # gridCoordinates = list(zip(lon_mx_offset.ravel(), lat_mx_offset.ravel()))
-    # data_grid1 = griddata(gridCoordinates, mi_dict['bt_mx'].ravel(), 
-    #    (x_grid_offset_gcd, y_grid_offset_gcd), 'linear')
+    lat_grid1 = np.tile(lat_arr1[:, np.newaxis], (1, len(x_arr_offset_gcd)))
+    lon_grid1 = x_grid_offset_gcd / np.cos(np.deg2rad(lat_grid1)) + mi_dict['op_lon']
 
-    lon_mx_buff, lat_mx_buff, bt_mx_buff = interp_tools.add_edge_buffer(
-        mi_dict['lon_mx'], mi_dict['lat_mx'], mi_dict['bt_mx'], 'linear'
-    )
-    # lon_mx_buff, lat_mx_buff, bt_mx_buff = (mi_dict['lon_mx'], mi_dict['lat_mx'], mi_dict['bt_mx'])
-    x_flat = lon_mx_buff.ravel()
-    y_flat = lat_mx_buff.ravel()
-    b_flat = bt_mx_buff.ravel()
+    x_flat = mi_dict['lon_mx'].ravel()
+    y_flat = mi_dict['lat_mx'].ravel()
+    b_flat = mi_dict['bt_mx'].ravel()
     valid = ~(np.isnan(x_flat) | np.isnan(y_flat) | np.isnan(b_flat))
+    
     if np.any(valid):
-        data_grid1 = griddata((x_flat[valid], y_flat[valid]), b_flat[valid], (lon_grid1, lat_grid1), 'linear')
+        tree = cKDTree(np.column_stack((x_flat[valid], y_flat[valid])))
+        query_pts = np.column_stack((lon_grid1.ravel(), lat_grid1.ravel()))
+        max_dist = 1.5 * LON_INC
+        dists, idxs = tree.query(query_pts, k=3, distance_upper_bound=max_dist)
+        data_grid1_flat = np.full(query_pts.shape[0], np.nan)
+        valid_queries = dists[:, 0] < np.inf
+        if np.any(valid_queries):
+            b_valid = b_flat[valid]
+            v_dists = dists[valid_queries]
+            v_idxs = idxs[valid_queries]
+            eps = 1e-12
+            weights = 1.0 / (v_dists**2 + eps)
+
+            valid_neighbors = v_dists < np.inf
+            weights[~valid_neighbors] = 0.0
+
+            safe_idxs = np.where(valid_neighbors, v_idxs, 0)
+            vals = b_valid[safe_idxs]
+            
+            data_grid1_flat[valid_queries] = np.sum(weights * vals, axis=1) / np.sum(weights, axis=1)
+        data_grid1 = data_grid1_flat.reshape(lon_grid1.shape)
     else:
         logger.error('No valid points to interpolate')
         data_grid1 = np.full(np.shape(lon_grid1), np.nan)

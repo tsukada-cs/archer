@@ -209,9 +209,9 @@ def add_edge_buffer(xSection, ySection, dataSection, interpType):
     """
     # Set up the buffered arrays
     numScans, numElems = np.shape(xSection)
-    xSectionBuff = np.nan * np.zeros((numScans + 4, numElems + 4))
-    ySectionBuff = np.nan * np.zeros((numScans + 4, numElems + 4))
-    dataSectionBuff = np.nan * np.zeros((numScans + 4, numElems + 4))
+    xSectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
+    ySectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
+    dataSectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
 
     # Add a buffer of perimeter values to allow interpolation to true size of obs
     if interpType in ('linear', 'cubic'):
