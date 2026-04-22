@@ -39,32 +39,32 @@ def discrete_cmap(N, base_cmap=None):
 
 def get_channel_settings(image, attrib):
     # Channel-specific settings
-    if attrib['archer_channel_type'] == '89GHz':
+    if attrib['archer_channel_type'].lower() == '89ghz':
         disp_grid0 = image['bt_grid']
         color_lo = [160, 160, 160]
         color_hi = [280, 280, 280]
         color_label = 'Brightness temperature (K)'
-    elif attrib['archer_channel_type'] == '37GHz':
+    elif attrib['archer_channel_type'].lower() == '37ghz':
         disp_grid0 = image['bt_grid']
         color_lo = [160, 160, 160]
         color_hi = [280, 280, 280]
         color_label = 'Brightness temperature (K)'
-    elif attrib['archer_channel_type'] == '183GHz':
+    elif attrib['archer_channel_type'].lower() == '183ghz':
         disp_grid0 = image['bt_grid']
         color_lo = [160, 160, 160]
         color_hi = [280, 280, 280]
         color_label = 'Brightness temperature (K)'
-    elif attrib['archer_channel_type'] == 'IR':
+    elif attrib['archer_channel_type'].lower() == 'ir':
         disp_grid0 = image['bt_grid']
         color_lo = [180, 180, 180]
         color_hi = [300, 300, 300]
         color_label = 'Brightness temperature (K)'
-    elif attrib['archer_channel_type'] == 'SWIR':
+    elif attrib['archer_channel_type'].lower() == 'swir':
         disp_grid0 = image['bt_grid']
         color_lo = [180, 180, 180]
         color_hi = [300, 300, 300]
         color_label = 'Brightness temperature (K)'
-    elif attrib['archer_channel_type'] == 'Vis' or attrib['archer_channel_type'] == 'DNB':
+    elif attrib['archer_channel_type'].lower() == 'vis' or attrib['archer_channel_type'].lower() == 'dnb':
         disp_grid0 = image['data_grid']
         color_lo = [0,   150, 150]
         color_hi = [255, 320, 320]
@@ -103,48 +103,20 @@ def plot_diag_4panel(
     ring_scatter_kwargs = dict(s=40, marker="x", c="purple", lw=0.8, zorder=2.1)
     final_scatter_kwargs = dict(s=40, marker="s", ec="k", fc='none', lw=1.2, zorder=2.1)
 
-    # Storm synoptic view
-    ax.flat[0].pcolormesh(lon_grid_disp, lat_grid_disp, bt_grid_disp, vmin=color_lo[0], vmax=color_hi[0], cmap=cmap)
-    ax.flat[0].scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
-    ax.flat[0].scatter(ss_max_lon, ss_max_lat, **spiral_scatter_kwargs)
-    ax.flat[0].scatter(rs_max_lon, rs_max_lat, **ring_scatter_kwargs)
-    ax.flat[0].scatter(out_dict['center_lon'], out_dict['center_lat'], **final_scatter_kwargs)
-    ax.flat[0].set(xlim=(np.min(lon_grid_disp[0,:]), np.max(lon_grid_disp[0,:])), ylim=(np.min(lat_grid_disp[:,0]), np.max(lat_grid_disp[:,0])))
-    ax.flat[0].set_title('(a) Center fix synoptics', loc='left')
-
-    # Storm combined score view
-    ax.flat[1].pcolormesh(lon_grid_disp, lat_grid_disp, bt_grid_disp, vmin=color_lo[2], vmax=color_hi[2], cmap=cmap)
-
-    if out_dict['uses_target']:
-        combo_score_grid_disp = score_dict['combo_score_grid']
-        with np.errstate(invalid='ignore'):
-            combo_score_grid_disp[combo_score_grid_disp < -1e8] = np.nan
-        ax.flat[1].contour(
-            score_dict['lon_grid1'], score_dict['lat_grid1'], combo_score_grid_disp, 
-            levels=10, linewidths=0.6, cmap="Reds"
-        )
-        ax.flat[1].scatter(out_dict['center_lon'], out_dict['center_lat'], **final_scatter_kwargs)
-        ax.flat[1].scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
-    ax.flat[1].set(xlim=(np.min(lon_grid_disp[0,:]), np.max(lon_grid_disp[0,:])), ylim=(np.min(lat_grid_disp[:,0]), np.max(lat_grid_disp[:,0])))
-    ax.flat[1].set_title('(b) Combined score', loc='left')    
-    
-
     # Storm spiral view
-    ax.flat[2].pcolormesh(lon_mx_disp, lat_mx_disp, bt_mx_disp, vmin=color_lo[0], vmax=color_hi[0], cmap=cmap)
+    ax.flat[0].pcolormesh(lon_mx_disp, lat_mx_disp, bt_mx_disp, vmin=color_lo[0], vmax=color_hi[0], cmap=cmap)
     #img1 = ax.flat[1].scatter(lon_mx, lat_mx, c=bt_noco_mx, vmin=160, vmax=280, cmap=cmap, edgecolors='none', marker=',')
     spiral_score_grid_disp = score_dict['spiral_score_grid']
     with np.errstate(invalid='ignore'):
         spiral_score_grid_disp[spiral_score_grid_disp < -1e8] = np.nan
-    ax.flat[2].contour(
+    ax.flat[0].contour(
         score_dict['lon_grid1'], score_dict['lat_grid1'], spiral_score_grid_disp, 
         levels=10, linewidths=0.6, cmap="Reds"
     )
-    ax.flat[2].scatter(ss_max_lon, ss_max_lat, **spiral_scatter_kwargs)
-    ax.flat[2].scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
 
     aspect_lon = np.cos(np.deg2rad(in_dict['op_lat'])) # Aspect ratio
-    ax.flat[2].set(xlim=(ss_max_lon-2.5/aspect_lon, ss_max_lon+2.5/aspect_lon), ylim=(ss_max_lat-2.5, ss_max_lat+2.5))
-    ax.flat[2].set_title(f'(c) Spiral score', loc='left')
+    ax.flat[0].set(xlim=(ss_max_lon-2.5/aspect_lon, ss_max_lon+2.5/aspect_lon), ylim=(ss_max_lat-2.5, ss_max_lat+2.5))
+    ax.flat[0].set_title(f'(a) Spiral score', loc='left')
 
     rect = mpatches.Rectangle(
         (np.min(lon_grid_disp), np.min(lat_grid_disp)), 
@@ -152,22 +124,20 @@ def plot_diag_4panel(
         np.max(lat_grid_disp) - np.min(lat_grid_disp), 
         linewidth=1, edgecolor='k', facecolor='none', ls="--", label="Zoomed region"
     )
-    ax.flat[2].add_patch(rect)
+    ax.flat[0].add_patch(rect)
 
     # Storm ring score view
-    ax.flat[3].pcolormesh(lon_grid_disp, lat_grid_disp, bt_grid_disp, vmin=color_lo[1], vmax=color_hi[1], cmap=cmap)
+    ax.flat[1].pcolormesh(lon_grid_disp, lat_grid_disp, bt_grid_disp, vmin=color_lo[1], vmax=color_hi[1], cmap=cmap)
 
     ring_score_grid_disp = score_dict['ring_score_grid']
     with np.errstate(invalid='ignore'):
         ring_score_grid_disp[ring_score_grid_disp == 0] = np.nan
-    ax.flat[3].contour(
+    ax.flat[1].contour(
         score_dict['lon_grid1'], score_dict['lat_grid1'], ring_weight * ring_score_grid_disp, 
         levels=5, linewidths=0.6, cmap="Reds"
     )
-    ax.flat[3].set(xlim=(np.min(lon_grid_disp[0,:]), np.max(lon_grid_disp[0,:])), ylim=(np.min(lat_grid_disp[:,0]), np.max(lat_grid_disp[:,0])))
-    ax.flat[3].set_title('(d) Ring score', loc='left')
-    ax.flat[3].scatter(rs_max_lon, rs_max_lat, **ring_scatter_kwargs)
-    ax.flat[3].scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
+    ax.flat[1].set(xlim=(np.min(lon_grid_disp[0,:]), np.max(lon_grid_disp[0,:])), ylim=(np.min(lat_grid_disp[:,0]), np.max(lat_grid_disp[:,0])))
+    ax.flat[1].set_title('(b) Ring score', loc='left')
 
     if out_dict['uses_target']:
         circle = mpatches.Circle(
@@ -178,7 +148,48 @@ def plot_diag_4panel(
             lw=1.5,
             zorder=2.1,
         )
-        ax.flat[3].add_patch(circle)
+        ax.flat[1].add_patch(circle)
+
+    # Storm combined score view
+    ax.flat[2].pcolormesh(lon_grid_disp, lat_grid_disp, bt_grid_disp, vmin=color_lo[2], vmax=color_hi[2], cmap=cmap)
+
+    if out_dict['uses_target']:
+        combo_score_grid_disp = score_dict['combo_score_grid']
+        with np.errstate(invalid='ignore'):
+            combo_score_grid_disp[combo_score_grid_disp < -1e8] = np.nan
+        ax.flat[2].contour(
+            score_dict['lon_grid1'], score_dict['lat_grid1'], combo_score_grid_disp, 
+            levels=10, linewidths=0.6, cmap="Reds"
+        )
+    ax.flat[2].set(xlim=(np.min(lon_grid_disp[0,:]), np.max(lon_grid_disp[0,:])), ylim=(np.min(lat_grid_disp[:,0]), np.max(lat_grid_disp[:,0])))
+    ax.flat[2].set_title('(c) Combined score', loc='left')
+
+    # Storm synoptic view
+    ax.flat[3].pcolormesh(lon_grid_disp, lat_grid_disp, bt_grid_disp, vmin=color_lo[0], vmax=color_hi[0], cmap=cmap)
+    ax.flat[3].set(xlim=(np.min(lon_grid_disp[0,:]), np.max(lon_grid_disp[0,:])), ylim=(np.min(lat_grid_disp[:,0]), np.max(lat_grid_disp[:,0])))
+    ax.flat[3].set_title('(d) Center fix synoptics', loc='left')
+
+    if out_dict['uses_target']:
+        ring_circle = mpatches.Circle(
+            (out_dict['center_lon'], out_dict['center_lat']),
+            out_dict['ring_radius_deg'],
+            edgecolor='m',
+            facecolor='none',
+            lw=1.5,
+            zorder=2.1,
+        )
+        ax.flat[3].add_patch(ring_circle)
+
+        radius_50cert_circle = mpatches.Circle(
+            (out_dict['center_lon'], out_dict['center_lat']),
+            out_dict['radius50percCertDeg'],
+            edgecolor='m',
+            facecolor='none',
+            ls=":",
+            lw=1.0,
+            zorder=2.1,
+        )
+        ax.flat[3].add_patch(radius_50cert_circle)
 
     # Colorbar
     p = ax.flat[2].get_position()
@@ -188,18 +199,19 @@ def plot_diag_4panel(
     cbar.set_label(color_label)
 
     # Legend
-    ax.flat[3].scatter([], [], marker='s', edgecolor='k', facecolor='none', ls=(0,(3,2)), lw=0.8, label="Zoomed region")
+    # ax.flat[3].scatter([], [], marker='s', edgecolor='k', facecolor='none', ls=(0,(3,2)), lw=0.8, label="Zoomed region")
     ax.flat[3].scatter([], [], **op_scatter_kwargs, label='Operational fix')
     ax.flat[3].scatter([], [], **final_scatter_kwargs, label='ARCHER fix')
     ax.flat[3].scatter([], [], **spiral_scatter_kwargs, label='Spiral max')
     ax.flat[3].scatter([], [], **ring_scatter_kwargs, label='Ring max')
     ax.flat[3].scatter([], [], marker='o', edgecolor='m', facecolor='none', lw=1.5, label="Ring")
+    ax.flat[3].scatter([], [], marker='o', edgecolor='m', facecolor='none', ls=":", lw=1.0, label="50% cert. radius")
     ax.flat[3].legend(
         frameon=False,
         loc='upper center',
         ncol=2,
         bbox_to_anchor=(0.45, -0.05),
-        columnspacing=1.5,
+        columnspacing=1.1,
         handletextpad=0.3,
     )
 
@@ -212,6 +224,10 @@ def plot_diag_4panel(
     for i, iax in enumerate(ax.flat):
         iax.set(aspect='equal')
         iax.tick_params(direction="in", right=True, top=True)
+        iax.scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
+        iax.scatter(out_dict['center_lon'], out_dict['center_lat'], **final_scatter_kwargs)
+        iax.scatter(rs_max_lon, rs_max_lat, **ring_scatter_kwargs)
+        iax.scatter(ss_max_lon, ss_max_lat, **spiral_scatter_kwargs)
         
     if display_filename is not None:
         fig.savefig(display_filename, dpi=100, bbox_inches='tight', pad_inches=0.1)

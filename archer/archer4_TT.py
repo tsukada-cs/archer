@@ -123,6 +123,9 @@ def _calc_confidence_score(confidence_grid, score_dict, confidence_dist_deg=0.75
     confidence_2nd_max = np.max(confidence_grid[dist_squared_grid > confidence_dist_deg**2])
     return confidence_max - confidence_2nd_max
 
+def _is_visir(channel_type: str) -> bool:
+    """Check if the channel type is visir"""
+    return channel_type.lower() in ('ir', 'swir', 'vis', 'dnb')
 
 def archer4(
     image: dict[str, np.ndarray],
@@ -132,6 +135,7 @@ def archer4(
     alpha: float = np.deg2rad(5),
     para_fix: bool = True,
     display_filename: Optional[str] = None,
+    quiet: Optional[bool] = False,
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[str, np.ndarray]]:
     """
     This function channels the operations into one of the ARCHER variants, which have
@@ -285,7 +289,7 @@ def archer4(
             num_pix = np.product(np.shape(image['bt_grid']))
             num_nan = np.sum(np.isnan(image['bt_grid']), axis=(0,1))
             if num_nan / num_pix > 0.3:
-                logger.warning('Too dark for ARCHER. Exiting.')
+                logger.error('Too dark for ARCHER. Exiting.')
                 return in_dict, out_dict, score_dict
         else:
             # Assume polar imagery is already normalized:
@@ -318,7 +322,6 @@ def archer4(
     if attrib['archer_channel_type'].lower() in ("ir", "swir", "vis", "dnb"):
         image = nav_tools.reduce_res(image, step_km=4)
 
-    logger.info('Computing center-fix on whole image...')
     # Write all the input data to a dictionary
     # Note here that the naming of "default" lat/lon changes between in_dict and image. 
     # image lat/lon grid is *unaltered* lat/lon. However, in_dict lat/lon is the lat/lon to be used in ARCHER.
@@ -339,7 +342,7 @@ def archer4(
     score_dict_wo_mask, conf_grid_wo_mask = _get_combined_score_dict(in_dict, mask_val=mask_val, alpha=alpha)
     qc_wo_mask = score_funcs.quality_check(score_dict_wo_mask['spiral_score_grid'], score_dict_wo_mask['fraction_input'], coverage_threshold=COVERAGE_THRESHOLD)
 
-    if qc_wo_mask:
+    if qc_wo_mask and _is_visir(attrib['archer_channel_type']):
         out_dict['uses_target'] = True
         score_dict = score_dict_wo_mask
         confidence_grid = conf_grid_wo_mask
@@ -360,14 +363,17 @@ def archer4(
         score_dict_w_mask, conf_grid_w_mask = _get_combined_score_dict(in_dict, mask_val=mask_val, alpha=alpha)
         qc_w_mask = score_funcs.quality_check(score_dict_w_mask['spiral_score_grid'], score_dict_w_mask['fraction_input'], coverage_threshold=COVERAGE_THRESHOLD)
 
-        if qc_w_mask:
+        if qc_w_mask and _is_visir(attrib['archer_channel_type']):
             out_dict['uses_target'] = True
             score_dict = score_dict_w_mask
             confidence_grid = conf_grid_w_mask
             in_dict["mask_val"] = mask_val
             out_dict["masked"] = True
         else:
-            out_dict['uses_target'] = False
+            if qc_w_mask and qc_wo_mask:
+                out_dict['uses_target'] = True
+            else:
+                out_dict['uses_target'] = False
             if np.max(score_dict_w_mask["combo_score_grid"]) > np.max(score_dict_wo_mask["combo_score_grid"]):
                 score_dict = score_dict_w_mask
                 confidence_grid = conf_grid_w_mask
@@ -440,6 +446,7 @@ def archer4(
     # Produce an fdeck-formatted string
     fdeck_str = fdeck_tools.generate_string(attrib, in_dict, out_dict, sector_info=sector_info)
     out_dict['fdeck_string'] = fdeck_str
-    logger.info(fdeck_str)
+    if not quiet:
+        logger.info(fdeck_str)
 
     return in_dict, out_dict, score_dict

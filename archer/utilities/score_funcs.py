@@ -71,14 +71,12 @@ def combo_parts_calc_3_0(
 
     # Resample the swath to a regular grid, centred on the fx point, and with 
     # the correct aspect ratio at the fx point
-    logger.info('Regridding data to equal lon/lat aspect ratio ... ')
     # lon_mx_offset = (mi_dict['lon_mx'] - mi_dict['op_lon']) * np.cos(np.deg2rad(mi_dict['op_lat']))
     # lat_mx_offset = mi_dict['lat_mx'] - mi_dict['op_lat']
     # good_points = np.logical_and(~np.isnan(lon_mx_offset), ~np.isnan(lat_mx_offset))
     # lon_mx_offset_nn = lon_mx_offset[good_points]
     # lat_mx_offset_nn = lat_mx_offset[good_points]
     # bth_mx_nn = mi_dict['bth_mx'][good_points]
-    # logger.info(f'np.shape(lon_mx_offset_nn) = {np.shape(lon_mx_offset_nn)}')
 
     # Represent data as a regular grid centered at (0,0). This is not the prettiest approach, but
     # it stays faithful to the legacy code.
@@ -111,11 +109,8 @@ def combo_parts_calc_3_0(
     else:
         logger.error('No valid points to interpolate')
         data_grid1 = np.full(np.shape(lon_grid1), np.nan)
-    # logger.info(f'np.shape(data_grid1) = {np.shape(data_grid1)}')
-    # logger.info(f'data_grid1 = {data_grid1}')
 
     # Spiral center
-    logger.info('Calculating spiral center ...')
     spiral_center_calc_args = {
         'x_grid_offset_gcd': x_grid_offset_gcd,
         'y_grid_offset_gcd': y_grid_offset_gcd,
@@ -145,9 +140,6 @@ def combo_parts_calc_3_0(
     spiral_score_grid_with_penalty_nonan[np.isnan(spiral_score_grid_with_penalty)] = -1e9
     is_inside_buffer = spiral_score_grid_with_penalty_nonan > np.nanmax(spiral_score_grid_with_penalty) - SPIRAL_FIT_BUFFER
 
-    # logger.info(f'np.sum(is_inside_buffer) = {np.sum(is_inside_buffer)}')
-    # logger.info(is_inside_buffer[::8, ::8])
-
     # Expand the buffer by SWARM_REACH
     valid_lons = lon_grid1[is_inside_buffer]
     valid_lats = lat_grid1[is_inside_buffer]
@@ -173,7 +165,6 @@ def combo_parts_calc_3_0(
         is_in_bounds = np.zeros(np.shape(lat_grid1), dtype=bool)
 
     # Ring center
-    logger.info('Calculating ring center ...')
     ring_score_dict = ring_score_calc(
         x_grid_offset_gcd, 
         y_grid_offset_gcd, 
@@ -323,7 +314,6 @@ def ring_score_calc(
     ring_point_thresh = 0.425 * na
 
     # Add reversal step for 37GHz b/c eyes are *colder*:
-    logger.info(f'sensor_type = {sensor_type}')
     if '37' in sensor_type:
         data_grid1 = 450 - data_grid1
 
@@ -363,7 +353,6 @@ def ring_score_calc(
     off_y_pts = y_grid_offset_gcd[valid_mask]
 
     # Build the score grids. Iterate by radius, and within that, iterate by location
-    print('Radius (deg) = ', end='')
     rax = np.arange(min_radius_deg, max_radius_deg+1e-6, 0.05)
 
     # Extra part for ERC calcs
@@ -372,7 +361,6 @@ def ring_score_calc(
 
     for rad_idx in reversed(range(rax.size)):
         radius_deg = rax[rad_idx]
-        print(f'{radius_deg:4.2f}', end=' ')
 
         # Calculate the row/col offsets for any center point at this radius
         ring_x_pts = radius_deg * np.cos(np.deg2rad(ang_deg_arr))

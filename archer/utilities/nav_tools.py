@@ -23,9 +23,7 @@ def antemeridian_decross(lon_grid, first_guess_lon):
     
     if not crosses_antemeridian:
         return lon_grid
-    
-    logger.info('Revamping lon grid for an antemeridian crossing')
-    
+        
     # Western hemisphere
     if first_guess_lon < 0:
         return np.where(lon_grid > 100, lon_grid - 360, lon_grid)
@@ -69,7 +67,6 @@ def reduce_res(image, step_km=4):
     new_row_step, new_col_step = reduce_step(image['lon_grid'], image['lat_grid'], step_km=step_km)
 
     if new_row_step > 1 or new_col_step > 1:
-        logger.info(f'Reducing resolution by factors of {new_row_step}, {new_col_step}')
         for key in image.keys():
             image[key] = image[key][::new_row_step, ::new_col_step]
     return image

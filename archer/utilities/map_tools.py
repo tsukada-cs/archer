@@ -98,14 +98,12 @@ def nan_around_coasts_89(lon_nopc_mx, lat_nopc_mx, bth_mx):
     if coasts_lon.size == 0:
         # No coast points in domain – nothing to mask
         cleared_swath = bth_mx.astype(float)
-        logger.info(f'Total points masked for coastal boundaries: {0}')
         return cleared_swath
  
     # Candidate pixels (bth >= 260)
     valid_rows, valid_cols = np.where(bth_mx >= 260)
     if valid_rows.size == 0:
         cleared_swath = bth_mx.astype(float)
-        logger.info(f'Total points masked for coastal boundaries: {0}')
         return cleared_swath
  
     lat_v = lat_nopc_mx[valid_rows, valid_cols] # (N,)
@@ -141,6 +139,4 @@ def nan_around_coasts_89(lon_nopc_mx, lat_nopc_mx, bth_mx):
  
     cleared_swath = bth_mx.astype(float)
     cleared_swath[swath_mask] = np.nan
- 
-    logger.info(f'Total points masked for coastal boundaries: {int(swath_mask.sum())}')
     return cleared_swath
