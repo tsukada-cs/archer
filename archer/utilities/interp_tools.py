@@ -7,7 +7,7 @@ Created on Wed Feb 24 10:56:54 2016
 import logging
 
 import numpy as np
-from scipy.interpolate import griddata
+from scipy.spatial import cKDTree
 
 
 logger = logging.getLogger(__name__)
@@ -123,9 +123,6 @@ def interp_section_to_global_rect_grid(lonSection, latSection, dataSection, lonG
     # Initialize grid and section variables
     lonGrid, latGrid = np.meshgrid(lonGridArr, latGridArr)
     dataInterpSection = np.full(np.shape(lonGrid), np.nan)
-    xSectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
-    ySectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
-    dataSectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
     
     # Convert according to zone:
     if zoneCode == 0:
@@ -158,105 +155,63 @@ def interp_section_to_global_rect_grid(lonSection, latSection, dataSection, lonG
     else:
         raise ValueError(f'Unknown zone code: {zoneCode}')
     
-    # Use x, y, data sections with buffers of data and nans at the perimeter to 
-    # set it up for clean interpolation at edges
-    xSectionBuff, ySectionBuff, dataSectionBuff = add_edge_buffer(xSection, ySection, dataSection, interp_type)        
-    # Do the interpolation with griddata on the subsection defined by inSubGrid
-    x_flat = xSectionBuff.ravel()
-    y_flat = ySectionBuff.ravel()
-    d_flat = dataSectionBuff.ravel()
+    # Do the interpolation with cKDTree on the subsection defined by inSubGrid
+    x_flat = xSection.ravel()
+    y_flat = ySection.ravel()
+    d_flat = dataSection.ravel()
     
     valid_mask = ~(np.isnan(x_flat) | np.isnan(y_flat) | np.isnan(d_flat))
     
     inSubGrid = np.logical_and( 
-        np.logical_and(xGrid > np.nanmin(xSectionBuff) - BUFFER_XY, 
-                       xGrid < np.nanmax(xSectionBuff) + BUFFER_XY), 
-        np.logical_and(yGrid > np.nanmin(ySectionBuff) - BUFFER_XY, 
-                       yGrid < np.nanmax(ySectionBuff) + BUFFER_XY))
+        np.logical_and(xGrid > np.nanmin(xSection) - BUFFER_XY, 
+                       xGrid < np.nanmax(xSection) + BUFFER_XY), 
+        np.logical_and(yGrid > np.nanmin(ySection) - BUFFER_XY, 
+                       yGrid < np.nanmax(ySection) + BUFFER_XY))
                        
     try:
         if np.any(valid_mask):
-            dataInterpSection[inSubGrid] = griddata(
-                (x_flat[valid_mask], y_flat[valid_mask]), d_flat[valid_mask], 
-                (xGrid[inSubGrid], yGrid[inSubGrid]), method=interp_type)
+            tree = cKDTree(np.column_stack((x_flat[valid_mask], y_flat[valid_mask])))
+            query_pts = np.column_stack((xGrid[inSubGrid].ravel(), yGrid[inSubGrid].ravel()))
+            
+            # Use distance upper bound to prevent artifacts (equivalent to the old nan envelope)
+            max_dist = 1.5 * lonGridRes
+            
+            if interp_type == 'nearest':
+                dists, idxs = tree.query(query_pts, k=1, distance_upper_bound=max_dist)
+                valid_queries = dists < np.inf
+                
+                if np.any(valid_queries):
+                    res = np.full(query_pts.shape[0], np.nan)
+                    res[valid_queries] = d_flat[valid_mask][idxs[valid_queries]]
+                    dataInterpSection[inSubGrid] = res
+            else:
+                # 'linear' or 'cubic' -> IDW
+                dists, idxs = tree.query(query_pts, k=3, distance_upper_bound=max_dist)
+                valid_queries = dists[:, 0] < np.inf
+                
+                if np.any(valid_queries):
+                    res = np.full(query_pts.shape[0], np.nan)
+                    v_dists = dists[valid_queries]
+                    v_idxs = idxs[valid_queries]
+                    
+                    eps = 1e-12
+                    weights = 1.0 / (v_dists**2 + eps)
+                    
+                    valid_neighbors = v_dists < np.inf
+                    weights[~valid_neighbors] = 0.0
+                    
+                    safe_idxs = np.where(valid_neighbors, v_idxs, 0)
+                    vals = d_flat[valid_mask][safe_idxs]
+                    
+                    res[valid_queries] = np.sum(weights * vals, axis=1) / np.sum(weights, axis=1)
+                    dataInterpSection[inSubGrid] = res
         else:
             dataInterpSection[inSubGrid] = np.nan
     except Exception as e:
-        logger.error(f'Error: Could not interpolate with griddata on this section: {e}')
+        logger.error(f'Error: Could not interpolate with cKDTree on this section: {e}')
         dataInterpSection[inSubGrid] = np.nan
     
     # Shift back from recentering if remapped in zoneCode 0 (midlatitudes)
     if zoneCode == 0:
         dataInterpSection = dataInterpSection[:, centeredLonReorder]
     return dataInterpSection
-    
-def add_edge_buffer(xSection, ySection, dataSection, interpType):
-    """
-    Put a buffer of data at the outer edge of the swath to allow the data to be interpolated
-    as far as can be justified, and then put a buffer of nans around that to prevent interpolation
-    artifacts.
-    
-    Inputs:
-        xSection, ySection: Navigation of swath section
-        dataSection: Corresponding data
-        interpType: 'linear', 'nearest', 'cubic'
-        
-    Returns:
-        xSectionBuff, ySectionBuff, dataSectionBuff: Same as inputs, but with 
-            buffered edges
-            
-    Feb 2016 (AJW)
-    """
-    # Set up the buffered arrays
-    numScans, numElems = np.shape(xSection)
-    xSectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
-    ySectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
-    dataSectionBuff = np.full((numScans + 4, numElems + 4), np.nan)
-
-    # Add a buffer of perimeter values to allow interpolation to true size of obs
-    if interpType in ('linear', 'cubic'):
-        # Spacing of 0.5 puts a value on the edge of the swath
-        xSectionBuff[2:-2, 2:-2] = xSection
-        ySectionBuff[2:-2, 2:-2] = ySection
-        dataSectionBuff[2:-2, 2:-2] = dataSection
-        xSectionBuff[1,:] = 1.5 * xSectionBuff[2,:] - 0.5 * xSectionBuff[3,:]
-        ySectionBuff[1,:] = 1.5 * ySectionBuff[2,:] - 0.5 * ySectionBuff[3,:]
-        dataSectionBuff[1,:] = dataSectionBuff[2,:]
-        xSectionBuff[-2,:] = 1.5 * xSectionBuff[-3,:] - 0.5 * xSectionBuff[-4,:]
-        ySectionBuff[-2,:] = 1.5 * ySectionBuff[-3,:] - 0.5 * ySectionBuff[-4,:]
-        dataSectionBuff[-2,:] = dataSectionBuff[-3,:]
-        xSectionBuff[:,1] = 1.5 * xSectionBuff[:,2] - 0.5 * xSectionBuff[:,3]
-        ySectionBuff[:,1] = 1.5 * ySectionBuff[:,2] - 0.5 * ySectionBuff[:,3]
-        dataSectionBuff[:,1] = dataSectionBuff[:,2]
-        xSectionBuff[:,-2] = 1.5 * xSectionBuff[:,-3] - 0.5 * xSectionBuff[:,-4]
-        ySectionBuff[:,-2] = 1.5 * ySectionBuff[:,-3] - 0.5 * ySectionBuff[:,-4]
-        dataSectionBuff[:,-2] = dataSectionBuff[:,-3]
-    elif interpType == 'nearest':
-        # Even spacing allows for a fair distance between data and surroundings
-        xSectionBuff[2:-2, 2:-2] = xSection
-        ySectionBuff[2:-2, 2:-2] = ySection
-        dataSectionBuff[2:-2, 2:-2] = dataSection
-        xSectionBuff[1,:] = 2 * xSectionBuff[2,:] - xSectionBuff[3,:]
-        ySectionBuff[1,:] = 2 * ySectionBuff[2,:] - ySectionBuff[3,:]
-        dataSectionBuff[1,:] = np.nan
-        xSectionBuff[-2,:] = 2 * xSectionBuff[-3,:] - xSectionBuff[-4,:]
-        ySectionBuff[-2,:] = 2 * ySectionBuff[-3,:] - ySectionBuff[-4,:]
-        dataSectionBuff[-2,:] = np.nan
-        xSectionBuff[:,1] = 2 * xSectionBuff[:,2] - xSectionBuff[:,3]
-        ySectionBuff[:,1] = 2 * ySectionBuff[:,2] - ySectionBuff[:,3]
-        dataSectionBuff[:,1] = np.nan
-        xSectionBuff[:,-2] = 2 * xSectionBuff[:,-3] - xSectionBuff[:,-4]
-        ySectionBuff[:,-2] = 2 * ySectionBuff[:,-3] - ySectionBuff[:,-4]
-        dataSectionBuff[:,-2] = np.nan
-    
-    # Add an envelope of nans to prevent interpolation artifacts
-    xSectionBuff[0,:] = 2.0 * xSectionBuff[1,:] - 1.0 * xSectionBuff[2,:]
-    ySectionBuff[0,:] = 2.0 * ySectionBuff[1,:] - 1.0 * ySectionBuff[2,:]
-    xSectionBuff[-1,:] = 2.0 * xSectionBuff[-2,:] - 1.0 * xSectionBuff[-3,:]
-    ySectionBuff[-1,:] = 2.0 * ySectionBuff[-2,:] - 1.0 * ySectionBuff[-3,:]
-    xSectionBuff[:,0] = 2.0 * xSectionBuff[:,1] - 1.0 * xSectionBuff[:,2]
-    ySectionBuff[:,0] = 2.0 * ySectionBuff[:,1] - 1.0 * ySectionBuff[:,2]
-    xSectionBuff[:,-1] = 2.0 * xSectionBuff[:,-2] - 1.0 * xSectionBuff[:,-3]
-    ySectionBuff[:,-1] = 2.0 * ySectionBuff[:,-2] - 1.0 * ySectionBuff[:,-3]
-    return xSectionBuff, ySectionBuff, dataSectionBuff
-    

@@ -141,7 +141,7 @@ def plot_diag_4panel(
 
     if out_dict['uses_target']:
         circle = mpatches.Circle(
-            (out_dict['center_lon'], out_dict['center_lat']),
+            (out_dict['archer_lon'], out_dict['archer_lat']),
             out_dict['ring_radius_deg'],
             edgecolor='m',
             facecolor='none',
@@ -171,7 +171,7 @@ def plot_diag_4panel(
 
     if out_dict['uses_target']:
         ring_circle = mpatches.Circle(
-            (out_dict['center_lon'], out_dict['center_lat']),
+            (out_dict['archer_lon'], out_dict['archer_lat']),
             out_dict['ring_radius_deg'],
             edgecolor='m',
             facecolor='none',
@@ -181,7 +181,7 @@ def plot_diag_4panel(
         ax.flat[3].add_patch(ring_circle)
 
         radius_50cert_circle = mpatches.Circle(
-            (out_dict['center_lon'], out_dict['center_lat']),
+            (out_dict['archer_lon'], out_dict['archer_lat']),
             out_dict['radius50percCertDeg'],
             edgecolor='m',
             facecolor='none',
@@ -217,7 +217,7 @@ def plot_diag_4panel(
 
     # Suptitle
     time_str = pd.to_datetime(in_dict["time"]).strftime('%Y-%m-%d %H:%M UTC')
-    title = f'[{attrib["archer_channel_type"]}] {time_str}  Vmax = {in_dict["op_vmax"]} kt'
+    title = f'[{attrib["archer_channel_type"]}] {time_str}  Vmax = {in_dict["vmax_kt"]} kt'
     fig.suptitle(title, y=0.91)
 
     # All axes
@@ -225,7 +225,7 @@ def plot_diag_4panel(
         iax.set(aspect='equal')
         iax.tick_params(direction="in", right=True, top=True)
         iax.scatter(in_dict['op_lon'], in_dict['op_lat'], **op_scatter_kwargs)
-        iax.scatter(out_dict['center_lon'], out_dict['center_lat'], **final_scatter_kwargs)
+        iax.scatter(out_dict['archer_lon'], out_dict['archer_lat'], **final_scatter_kwargs)
         iax.scatter(rs_max_lon, rs_max_lat, **ring_scatter_kwargs)
         iax.scatter(ss_max_lon, ss_max_lat, **spiral_scatter_kwargs)
         

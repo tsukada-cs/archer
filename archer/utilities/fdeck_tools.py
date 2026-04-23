@@ -37,23 +37,23 @@ def generate_string(attrib, in_dict, out_dict, sector_info=None):
     center_int = '         C'
 
     # Use either the ARCHER center, or None if there is none
-    if out_dict['center_lat'] is None:
+    if out_dict['archer_lat'] is None:
         flag_indic = 'C'
         lat_str = '     '
         lon_str = '      '
     else:
         flag_indic = ' '
-        if out_dict['center_lat'] > 0:
+        if out_dict['archer_lat'] > 0:
             nshem = 'N'
         else:
             nshem = 'S'
-        if out_dict['center_lon'] > 0:
+        if out_dict['archer_lon'] > 0:
             ewhem = 'E'
         else:
             ewhem = 'W'
 
-        lat_str = '{:4d}'.format(int(np.round(np.abs(out_dict['center_lat']*100)))) + nshem
-        lon_str = '{:5d}'.format(int(np.round(np.abs(out_dict['center_lon']*100)))) + ewhem
+        lat_str = '{:4d}'.format(int(np.round(np.abs(out_dict['archer_lat']*100)))) + nshem
+        lon_str = '{:5d}'.format(int(np.round(np.abs(out_dict['archer_lon']*100)))) + ewhem
 
     height_ob = '     ' # Keep empty?
 

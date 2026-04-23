@@ -6,7 +6,8 @@ import xarray as xr
 
 from archer.archer4_TT import archer4
 
-fpath = "/home/tsukada/git/archer/data/spm/WP232024_202410300500_UNHF3o4v5.nc"
+fpath = "/home/tsukada/git/archer/data/spm/WP022023_202305250420_UNHF3o4v5.nc"
+# fpath = "/home/tsukada/git/archer/data/spm/WP232024_202410300500_UNHF3o4v5.nc"
 # fpath = "/home/tsukada/git/archer/data/spm/WP232024_202410280500_UNHF3o4v5.nc"
 # fpath = "/home/tsukada/git/archer/data/spm/WP022023_202305220400_UNHF3o4v5.nc"
 spm = xr.open_dataset(fpath)
@@ -51,4 +52,14 @@ in_dict, out_dict, score_dict = archer4(
     para_fix=False,
     display_filename=img_opath
 )
+# %%
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+ax.pcolormesh(lon2d, lat2d, spm['tb_89h'], shading='auto', cmap='bone')
+ax.scatter(out_dict['archer_lon'], out_dict['archer_lat'], 50, ec="k", fc="none", marker='s')
+ax.scatter(in_dict['op_lon'], in_dict['op_lat'], 80, "k", marker='+')
+ax.set(xlim=(score_dict['lon_grid1'].min(), score_dict['lon_grid1'].max()),
+       ylim=(score_dict['lat_grid1'].min(), score_dict['lat_grid1'].max()))
+ax.set(aspect="equal")
 # %%

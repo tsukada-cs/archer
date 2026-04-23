@@ -51,7 +51,7 @@ def _get_ring_weight_mw(vmax):
     elif vmax >= 84:
         return 0.0263
     else:
-        logger.error('`op_vmax` must be a scalar')
+        logger.error('`vmax_kt` must be a scalar')
         return 0.0
 
 def _get_mask_val(channel_type):
@@ -187,7 +187,7 @@ def archer4(
         in_dict['time'] = Time of the image
         in_dict['op_lon'] = Same as first_guess['lon']
         in_dict['op_lat'] = Same as first_guess['lat']
-        in_dict['op_vmax'] = Same as first_guess['vmax']
+        in_dict['vmax_kt'] = Same as first_guess['vmax']
         in_dict['ring_weight'] = Relative weight of ring score (dependent on sensor)
 
     out_dict: dict[str, np.ndarray]
@@ -200,10 +200,10 @@ def archer4(
         out_dict['radius50percCertDeg'] = Radius of 50% certainty area for center fix
         out_dict['radius95percCertDeg'] = Radius of 95% certainty area for center fix
         out_dict['eye_prob'] = Empirically determined probability of an eye (85GHz and IR only)
-        out_dict['center_lon'] = ARCHER center fix longitude
-        out_dict['center_lat'] = ARCHER center fix latitude
-        out_dict['weak_center_lon'] = Last-resort center fix that violates some rules
-        out_dict['weak_center_lat'] = "
+        out_dict['archer_lon'] = ARCHER center fix longitude
+        out_dict['archer_lat'] = ARCHER center fix latitude
+        out_dict['weak_archer_lon'] = Last-resort center fix that violates some rules
+        out_dict['weak_archer_lat'] = "
         out_dict['masked'] = Whether the image was masked
 
     score_dict: dict[str, np.ndarray]
@@ -328,7 +328,7 @@ def archer4(
     in_dict['sensor'] = attrib['archer_channel_type']
     in_dict['op_lon'] = first_guess['lon']
     in_dict['op_lat'] = first_guess['lat']
-    in_dict['op_vmax'] = first_guess['vmax']
+    in_dict['vmax_kt'] = first_guess['vmax']
     in_dict['time'] = first_guess['time']
     in_dict['bt_mx'] = image['bt_grid']
 
@@ -399,7 +399,7 @@ def archer4(
 
     # Represent the center fix uncertainty in terms of radii of 50% and 95% confidence
     out_dict['confidence_score'] = _calc_confidence_score(confidence_grid, score_dict, confidence_dist_deg=0.75)
-    out_dict['alpha_parameter'] = conversions.confidence_to_alpha(out_dict['confidence_score'], attrib['archer_channel_type'], 0, in_dict['op_vmax'])
+    out_dict['alpha_parameter'] = conversions.confidence_to_alpha(out_dict['confidence_score'], attrib['archer_channel_type'], 0, in_dict['vmax_kt'])
     radius_err_range = np.arange(0, 10, 0.01) # in degrees
     cdf = 1.0 - (out_dict['alpha_parameter'] * radius_err_range + 1.0) * np.exp(-out_dict['alpha_parameter'] * radius_err_range)
 
@@ -427,15 +427,15 @@ def archer4(
     
     # Store the center fix in the output dictionary
     if out_dict['uses_target']: # This is an official center-fix
-        out_dict['center_lon'] = nav_tools.antemeridian_restore(lon_max_score)
-        out_dict['center_lat'] = lat_max_score
-        out_dict['weak_center_lon'] = None
-        out_dict['weak_center_lat'] = None
+        out_dict['archer_lon'] = nav_tools.antemeridian_restore(lon_max_score)
+        out_dict['archer_lat'] = lat_max_score
+        out_dict['weak_archer_lon'] = None
+        out_dict['weak_archer_lat'] = None
     else: # This is a center-fix if you must, but it's not official because it's probably corrupted
-        out_dict['center_lon'] = None
-        out_dict['center_lat'] = None
-        out_dict['weak_center_lon'] = nav_tools.antemeridian_restore(lon_max_score)
-        out_dict['weak_center_lat'] = lat_max_score
+        out_dict['archer_lon'] = None
+        out_dict['archer_lat'] = None
+        out_dict['weak_archer_lon'] = nav_tools.antemeridian_restore(lon_max_score)
+        out_dict['weak_archer_lat'] = lat_max_score
 
     # Plot diagnostic figure if display_filename is not None
     if display_filename is not None:

@@ -4,8 +4,7 @@ import logging
 import numpy as np
 import scipy.ndimage as ndi
 from scipy.spatial import cKDTree
-
-from archer.utilities import interp_tools
+from scipy.interpolate import RegularGridInterpolator
 
 
 logger = logging.getLogger(__name__)
@@ -287,10 +286,12 @@ def spiral_center_calc(
     all_center_mean_cross[valid_mask] = valid_scores
 
     # 2. Search for the best full-resolution grid cell by (cubic?) interpolation
-    sp_grid = interp_tools.interp_section_to_global_rect_grid(
-        all_center_xs, all_center_ys, all_center_mean_cross,
-        x_grid_offset_gcd[0,:], y_grid_offset_gcd[:,0], 'linear'
+    interp_func = RegularGridInterpolator(
+        (off_arr, off_arr), all_center_mean_cross, 
+        method='linear', bounds_error=False, fill_value=np.nan
     )
+    pts = np.column_stack((x_grid_offset_gcd.ravel(), y_grid_offset_gcd.ravel()))
+    sp_grid = interp_func(pts).reshape(x_grid_offset_gcd.shape)
 
     # Clean out the dodgy edge values
     sp_grid[x_grid_offset_gcd**2 + y_grid_offset_gcd**2 >= spiral_search_radius_deg**2] = np.nan
@@ -320,11 +321,14 @@ def ring_score_calc(
 
     # Calculate the modified gradient field
     # Somehow, the step of *1.14* is better than 1 for the *final* result. Couldn't figure out why.
+
+    POWER = 0.333
+    GRADIENT_STEP = 1.14
     if gradient_mode.lower() == "sobel":
-        grad_e = ndi.sobel(data_grid1**0.333, axis=1) / 1.14
-        grad_n = ndi.sobel(data_grid1**0.333, axis=0) / (-1.14)
+        grad_e = ndi.sobel(data_grid1**POWER, axis=1) / GRADIENT_STEP
+        grad_n = ndi.sobel(data_grid1**POWER, axis=0) / (-GRADIENT_STEP)
     else:
-        grad_n, grad_e = np.gradient((data_grid1**0.333), -1.14, 1.14) # (This has to reverse the Matlab formula)
+        grad_n, grad_e = np.gradient((data_grid1**POWER), -GRADIENT_STEP, GRADIENT_STEP) # (This has to reverse the Matlab formula)
 
     # Translate degrees to pixels
     deg_per_pix = np.abs(y_grid_offset_gcd[0,0] - y_grid_offset_gcd[1,0])
