@@ -73,7 +73,7 @@ def archer4_visir(image, attrib, first_guess, alpha=np.deg2rad(5), para_fix=True
             image['bt_grid'] = 350 - 0.75 * bv_norm
 
             # Filter out nighttime cases
-            num_pix = np.product(np.shape(image['bt_grid']))
+            num_pix = np.prod(np.shape(image['bt_grid']))
             num_nan = np.sum(np.isnan(image['bt_grid']), axis=(0,1))
             if num_nan / num_pix > 0.3:
                 logger.warning('Too dark for ARCHER. Exiting.')
