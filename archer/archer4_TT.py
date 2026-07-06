@@ -29,7 +29,7 @@ def _get_ring_weight(channel_type, vmax):
     elif channel_type.lower() in ('89ghz', '37ghz', '183ghz'):
         return _get_ring_weight_mw(vmax)
     else:
-        logger.error(f'Unknown `channel_type`: {channel_type}')
+        logger.error(f'Unknown `channel_type`: "{channel_type}"')
         return 0.0
 
 def _get_ring_weight_visir(channel_type):
@@ -39,7 +39,7 @@ def _get_ring_weight_visir(channel_type):
     elif channel_type.lower() in ('vis', 'dnb'):
         return 0.0020
     else:
-        logger.error(f'Unknown `channel_type`: {channel_type}')
+        logger.error(f'Unknown `channel_type`: "{channel_type}"')
         return 0.0
 
 def _get_ring_weight_mw(vmax):
@@ -51,7 +51,7 @@ def _get_ring_weight_mw(vmax):
     elif vmax >= 84:
         return 0.0263
     else:
-        logger.error('`vmax_kt` must be a scalar')
+        logger.error(f'`vmax_kt` must be a scalar: {vmax}')
         return 0.0
 
 def _get_mask_val(channel_type):
@@ -65,7 +65,7 @@ def _get_mask_val(channel_type):
     elif channel_type.lower() in ('swir', 'vis', 'dnb', 'rscat', 'ascat'):
         return -1e6
     else:
-        logger.error(f'Unknown `channel_type`: {channel_type}')
+        logger.error(f'Unknown `channel_type`: "{channel_type}"')
         return 0.0
 
 def _get_structure_height_km(channel_type):
@@ -78,8 +78,12 @@ def _get_structure_height_km(channel_type):
         return 3
     elif channel_type.lower() in ('ascat', 'rscat'):
         return 0
+    elif channel_type.lower() in ('ir', 'swir'):
+        return 16
+    elif channel_type.lower() in ('vis', 'dnb'):
+        return 2
     else:
-        logger.error(f'Unknown `channel_type`: {channel_type}')
+        logger.error(f'Unknown `channel_type`: "{channel_type}"')
         return 0
 
 def _get_penalty_weight(channel_type):
@@ -91,7 +95,7 @@ def _get_penalty_weight(channel_type):
     elif channel_type.lower() in ('ascat', 'rscat'):
         return 1.0
     else:
-        logger.error(f'Unknown `channel_type`: {channel_type}')
+        logger.error(f'Unknown `channel_type`: "{channel_type}"')
         return 0.0
 
 def _get_combined_score_dict(in_dict, mask_val, alpha):
